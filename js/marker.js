@@ -106,7 +106,13 @@
       m = markers.filter(function (x) { return x.id === 0; })[0] || markers[0];
     }
     if (m) {
-      corners = m.corners.map(function (c) { return { x: c.x, y: c.y }; });
+      // The table's many tracked points place the marker more steadily than its 4 detected corners, so while
+      // the two agree the detection only nudges the tracked corners (removing drift); otherwise it wins.
+      var det = m.corners, far = !tracked;
+      for (var k = 0; k < 4 && !far; k++) far = Math.hypot(det[k].x - corners[k].x, det[k].y - corners[k].y) > SNAP_PX;
+      corners = det.map(function (c, k) {
+        return far ? { x: c.x, y: c.y } : { x: corners[k].x + (c.x - corners[k].x) * NUDGE, y: corners[k].y + (c.y - corners[k].y) * NUDGE };
+      });
       replacePoints();
     } else if (!tracked) corners = null;
     if (corners) addFeatures(sw, sh);
@@ -126,6 +132,7 @@
   // in marker units. The homography from those table positions to where the points are now (RANSAC drops
   // points that are not on the table, like hands) gives the marker's 4 corners even when it is covered or
   // out of view, so the camera can walk all round the table. Seeing the marker again removes any drift.
+  var SNAP_PX = 6, NUDGE = 0.1;   // detection vs tracking, in detection-image pixels
   var TRACK_MAX = 200, TRACK_MIN = 80, TRACK_LOST = 10, TRACK_RADIUS = 0.6;  // radius in metres around the marker
   var MARKER_PLANE = [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]];  // corners in marker units
   var corners = null;          // marker corners in detection-image pixels, seen or carried by tracking
@@ -350,7 +357,9 @@
       $('ar-hint').hidden = !!corners;
       if (!corners) $('ar-hint').textContent = hasPose ? 'Aponta outra vez para o marcador' : 'Aponta a câmara para o marcador';
       if (!seen) { hasPose = false; return; }
-      curPos.lerp(tPos, 0.5); curQuat.slerp(tQuat, 0.5);
+      // Smooth more while the phone is nearly still (small differences are noise) and follow quickly when it moves.
+      var a = Math.min(0.85, Math.max(0.2, curPos.distanceTo(tPos) / 0.01, curQuat.angleTo(tQuat) / 0.035));
+      curPos.lerp(tPos, a); curQuat.slerp(tQuat, a);
       D.anchor.matrixAutoUpdate = false;
       D.anchor.matrix.compose(curPos, curQuat, new THREE.Vector3(1, 1, 1));
       D.anchor.matrixWorldNeedsUpdate = true;
