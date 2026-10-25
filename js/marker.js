@@ -109,6 +109,7 @@
     if (m) {
       // The table's many tracked points place the marker more steadily than its 4 detected corners, so while
       // the two agree the detection only nudges the tracked corners (removing drift); otherwise it wins.
+      lastMarkerAt = performance.now();
       var det = m.corners, far = !tracked;
       for (var k = 0; k < 4 && !far; k++) far = Math.hypot(det[k].x - corners[k].x, det[k].y - corners[k].y) > SNAP_PX;
       corners = det.map(function (c, k) {
@@ -287,6 +288,54 @@
       if (!near) { ptsPrev[nPts * 2] = x; ptsPrev[nPts * 2 + 1] = y; ptsPlane[nPts * 2] = cands[i].u; ptsPlane[nPts * 2 + 1] = cands[i].v; nPts++; }
     }
   }
+
+  // ---------- Without a marker: gravity and a tap ----------
+  // The phone's accelerometer says which way is up, so the table's tilt relative to the camera is known; its
+  // distance is not, so it is taken as CAM_HEIGHT. A tap on the table puts a virtual marker square there
+  // (projected into the picture as 4 corners), and from then on the table tracking above keeps it in place,
+  // exactly as after a real marker.
+  var CAM_HEIGHT = 0.5;                  // metres from the camera down to the table, a guess
+  var up = null, lastMarkerAt = 0;       // up: smoothed gravity reaction in device axes (x right, y top, z out of screen)
+  function onMotion(e) {
+    var g = e.accelerationIncludingGravity;
+    if (!g || g.x === null) return;
+    if (!up) up = { x: g.x, y: g.y, z: g.z };
+    else { up.x += (g.x - up.x) * 0.2; up.y += (g.y - up.y) * 0.2; up.z += (g.z - up.z) * 0.2; }
+  }
+  // Up, in camera axes (x right, y down, z forward), allowing for the screen being turned.
+  function upInCamera() {
+    if (!up) return null;
+    var a = ((screen.orientation && screen.orientation.angle) || window.orientation || 0) * Math.PI / 180;
+    var sx = up.x * Math.cos(a) + up.y * Math.sin(a), sy = -up.x * Math.sin(a) + up.y * Math.cos(a);
+    var v = new THREE.Vector3(sx, -sy, -up.z), L = v.length();
+    return L > 3 ? v.divideScalar(L) : null;   // no reading, or the phone is being shaken
+  }
+  // Puts the game where the screen point (detection-image pixels) meets the table. Returns false if it cannot.
+  function placeOnTable(x, y) {
+    var n = upInCamera();
+    if (!n || !small.width) return false;
+    var f = FOCAL * small.width, cx = small.width / 2, cy = small.height / 2;
+    var d = new THREE.Vector3((x - cx) / f, (y - cy) / f, 1), nd = n.dot(d);
+    if (nd > -0.05) return false;                 // looking at or above the horizon
+    var P = d.multiplyScalar(-CAM_HEIGHT / nd);
+    var e1 = new THREE.Vector3(1, 0, 0).sub(n.clone().multiplyScalar(n.x)).normalize(), e2 = e1.clone().cross(n);
+    // The game sits behind its anchor (see applyTransform in app.js): move the anchor so the game's centre is at the tap.
+    P.addScaledVector(e2, (D.aspectH / 2 + 0.02) * D.settings.size / 100);
+    var a = D.settings.markerSize / 200;
+    var pts = [[-a, -a], [a, -a], [a, a], [-a, a]].map(function (q) {
+      var X = P.clone().addScaledVector(e1, q[0]).addScaledVector(e2, q[1]);
+      return { x: f * X.x / X.z + cx, y: f * X.y / X.z + cy };
+    });
+    if (!sane(pts, small.width, small.height)) return false;
+    corners = pts; nPts = 0; hasPose = false; table = null;
+    addFeatures(small.width, small.height);
+    return true;
+  }
+  $('view').addEventListener('click', function (e) {
+    if (!stream || editPts || performance.now() - lastMarkerAt < 1500) return;   // a real marker in view wins
+    var q = fromScreen(e.clientX, e.clientY);
+    if (!placeOnTable(q[0], q[1])) { $('ar-hint').textContent = up ? 'Aponta mais para baixo, para a mesa, e toca outra vez' : 'Este telemóvel não deu o sensor de gravidade: usa o marcador'; $('ar-hint').hidden = false; }
+  });
 
   // ---------- Table outline (like a document scanner) ----------
   // "Mesa" finds the table top around the marker: the camera picture is straightened onto the table plane
@@ -553,7 +602,7 @@
       var seen = (!!corners || (locked && hasPose)) && !editPts;   // the game is hidden while the table is outlined
       D.anchor.visible = seen;
       $('ar-hint').hidden = !!corners;
-      if (!corners) $('ar-hint').textContent = hasPose ? 'Aponta outra vez para o marcador' : 'Aponta a câmara para o marcador';
+      if (!corners) $('ar-hint').textContent = hasPose ? 'Aponta outra vez para o marcador' : (up ? 'Aponta para o marcador, ou toca na mesa' : 'Aponta a câmara para o marcador');
       if (!seen) { if (!editPts) hasPose = false; return; }
       // Smooth more while the phone is nearly still (small differences are noise) and follow quickly when it moves.
       var a = Math.min(0.85, Math.max(0.2, curPos.distanceTo(tPos) / 0.01, curQuat.angleTo(tQuat) / 0.035));
@@ -576,7 +625,8 @@
         stream = s; video.srcObject = s; video.hidden = false;
         return video.play();
       }).then(function () {
-        hasPose = false; corners = null; nPts = 0;
+        hasPose = false; corners = null; nPts = 0; up = null;
+        window.addEventListener('devicemotion', onMotion);
         D.setEnvironment('camera');
         D.setMode(markerMode);
         document.body.classList.add('camera-mode');
@@ -597,6 +647,7 @@
     $('ar-hint').hidden = true;
     $('marker-lock').hidden = true; setLocked(false);
     $('table-btn').hidden = true; endEdit(false); table = null;
+    window.removeEventListener('devicemotion', onMotion);
     D.setEnvironment('preview');
     D.setMode(null);
   }
@@ -604,5 +655,5 @@
   $('marker-lock').addEventListener('click', function () { setLocked(!locked); });
 
   D.marker = { start: start, stop: stop, active: function () { return !!stream; }, poseFromCorners: poseFromCorners, target: target,
-    _detectTable: function () { return detectTable(); }, _process: function (image) { detector = detector || new AR.Detector({ dictionaryName: 'ARUCO_MIP_36h12' }); var ok = processFrame(image); return { ok: ok, corners: corners, points: nPts }; } };
+    _place: function (x, y) { return placeOnTable(x, y); }, _detectTable: function () { return detectTable(); }, _process: function (image) { detector = detector || new AR.Detector({ dictionaryName: 'ARUCO_MIP_36h12' }); var ok = processFrame(image); return { ok: ok, corners: corners, points: nPts }; } };
 })();
