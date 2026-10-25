@@ -578,7 +578,8 @@
   });
   $('menu-btn').addEventListener('click', function () {
     $('menu').hidden = false;
-    $('layers-info').textContent = layersInfo.length ? 'Camadas neste momento: ' + layersInfo.map(function (i) { return SLOT_NAMES[i]; }).join(', ') + '.' : '';
+    $('layers-info').textContent = (layersInfo.length ? 'Camadas neste momento: ' + layersInfo.map(function (i) { return SLOT_NAMES[i]; }).join(', ') + '. ' : '') +
+      ($('fps').textContent ? 'Velocidade: ' + $('fps').textContent + ' (60 é a normal).' : '');
   });
   $('close-menu').addEventListener('click', function () { $('menu').hidden = true; });
   $('turbo').addEventListener('click', function () { turbo = !turbo; $('turbo').setAttribute('aria-pressed', String(turbo)); });
