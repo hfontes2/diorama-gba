@@ -23,6 +23,8 @@ Os planos são texturas numa cena three.js. No modo AR, a app usa o hit-test do 
 - **Mundo 3D** (menu ☰, só Pokémon FireRed e LeafGreen em inglês, versão 1.0): em vez da imagem, `js/world.js` lê da memória do jogo o mapa carregado (grelha de metatiles e colisões), os gráficos dos tilesets na VRAM e as cores na paleta. As células que bloqueiam o caminho (árvores, casas, vedações, placas) viram blocos: as duas filas de baixo ficam de pé como parede da frente e as de cima deitam-se como telhado, o que desfaz a perspetiva de cima do jogo. O chão fica plano e a água um pouco abaixo. Funciona em todos os mapas do jogo (cidades, rotas, grutas, interiores) porque é construído a partir do mapa que estiver carregado. As batalhas e outros ecrãs que não são mapa usam o estilo voxel. Os endereços de memória vêm do mapa de símbolos do projeto [pret/pokefirered](https://github.com/pret/pokefirered).
 - **VR**: imagem dividida para óculos de telemóvel (tipo Cardboard), com o giroscópio a seguir a cabeça (`js/vr.js`). Joga-se com um comando Bluetooth; tocar no ecrã volta a centrar a vista.
 
+Em todos os estilos, a camada de cima (BG0 e sprites de prioridade 0, onde o FireRed desenha caixas de texto e menus) é desenhada por cima da vista 3D, sempre legível rode-se a vista como se rodar (opção "Diálogos e menus sempre à frente"). No FireRed/LeafGreen, nos ecrãs que não são mapa (nome, menus, batalhas) o estilo voxel deita os sprites e baixa os blocos, para os cursores e setas não ficarem tapados.
+
 ## Usar
 
 1. Abre o site no Chrome do telemóvel (precisa de https para o AR).

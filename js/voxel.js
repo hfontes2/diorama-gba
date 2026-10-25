@@ -17,6 +17,7 @@
   var GROUND = 3;                  // sprites stand on top of the ground slab
   var SPRITE_SLOTS = [7, 5, 3, 1]; // by OBJ priority 0..3
   var MAX_SPRITES = 48;
+  var MENU_HEIGHT = 0.25;          // block height on screens that are not a map (FireRed/LeafGreen only)
 
   var enabled = false;
   var root = new THREE.Group();
@@ -99,10 +100,31 @@
   function heightScale() { return Math.max(0.05, D.settings.gap / 14); }
 
   function update(rp) {
-    var used = rp.slotUsedFrame, hs = heightScale();
+    var used = rp.slotUsedFrame, hs = heightScale(), menu = D.world && D.world.menuScreen();
+    // Menus get low blocks, so tall panels don't hide the text and cursors next to them.
+    if (menu) hs *= MENU_HEIGHT;
     for (var s = 0; s < 8; s++) D.slots[s].mesh.visible = false;
     columns.forEach(function (c) { c.group.visible = !!used[c.slot]; c.group.scale.z = hs; });
+    if (menu) { flatSprites(used, hs); return; }
     updateSprites(rp, GROUND * hs);
+  }
+
+  // On screens that are not a map (naming screen, menus, battles) the sprites are cursors, arrows and
+  // panels: standing them up would bury them inside the blocks, so they lie flat on top of the
+  // background column of the same priority, like on the GBA screen.
+  function flatSprites(used, hs) {
+    hideSprites();
+    COLUMNS.forEach(function (c) {
+      var sl = D.slots[c.slot + 1];
+      sl.mesh.visible = !!used[c.slot + 1];
+      sl.mesh.position.z = (c.to + 0.5) * hs * PX;
+      sl.edge.visible = sl.glass.visible = false;
+    });
+  }
+
+  // Hides the blocks and flat sprites of these slots this frame (they are drawn over the view instead).
+  function hideSlots(list) {
+    columns.forEach(function (c) { if (list.indexOf(c.slot) >= 0) c.group.visible = false; });
   }
 
   function setEnabled(on) {
@@ -111,6 +133,6 @@
     if (!on) hideSprites();
   }
 
-  D.voxel = { update: update, setEnabled: setEnabled, updateSprites: updateSprites, hideSprites: hideSprites, enabled: function () { return enabled; } };
+  D.voxel = { update: update, hideSlots: hideSlots, setEnabled: setEnabled, updateSprites: updateSprites, hideSprites: hideSprites, enabled: function () { return enabled; } };
   setEnabled(D.settings.style === 'voxel');
 })();

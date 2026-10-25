@@ -10,7 +10,7 @@
 
   // ---------- Settings ----------
   function loadSettings() {
-    var d = { gap: 14, tilt: 35, size: 36, markerSize: 10, style: '', glass: true, shadows: true, sound: true };
+    var d = { gap: 14, tilt: 35, size: 36, markerSize: 10, style: '', hud: true, glass: true, shadows: true, sound: true };
     try { Object.assign(d, JSON.parse(localStorage.getItem('diorama.settings') || '{}')); } catch (e) {}
     if (!d.style) d.style = d.voxel ? 'voxel' : 'layers';   // older settings had a voxel on/off switch
     delete d.voxel;
@@ -396,6 +396,53 @@
     var c = sun.shadow.camera; c.left = -r; c.right = r; c.top = r; c.bottom = -r; c.near = 0.01; c.far = 4 * r; c.updateProjectionMatrix();
   }
 
+  // ---------- Dialogs and menus in front ----------
+  // The top background layer (BG0) and the top sprites hold the game's text boxes and menus. With the
+  // "hud" setting they are drawn flat over the 3D picture, the same size whatever the view, instead of in
+  // the diorama. Not in VR, where a flat overlay can't be seen in stereo.
+  var HUD_SLOTS = [6, 7];
+  var hudScene = new THREE.Scene(), hudCam = new THREE.OrthographicCamera(0, 1, 1, 0, -1, 1);
+  var hudMeshes = HUD_SLOTS.map(function (s) {
+    var m = new THREE.Mesh(planeGeo, new THREE.MeshBasicMaterial({ map: slots[s].tex, transparent: true, alphaTest: 0.5, depthTest: false }));
+    m.renderOrder = s; hudScene.add(m); return m;
+  });
+  function hudActive() {
+    return settings.hud && running && !renderer.xr.isPresenting && !(window.diorama.vr && window.diorama.vr.active());
+  }
+  // The free part of the screen between the touch controls, in CSS pixels from the top-left.
+  var hudBox = null, hudBoxAt = 0;
+  function hudRect(w, h) {
+    if (hudBox && hudBox.w0 === w && hudBox.h0 === h && performance.now() - hudBoxAt < 1000) return hudBox;
+    var top = 8, bottom = h - 8, left = 8, right = w - 8;
+    var bar = document.querySelector('.topbar'), dpad = $('dpad'), mid = document.querySelector('.controls .mid'), ab = document.querySelector('.controls .ab');
+    if (bar && dpad && mid && ab && !$('hud').hidden) {
+      var B = bar.getBoundingClientRect(), Dp = dpad.getBoundingClientRect(), M = mid.getBoundingClientRect(), Ab = ab.getBoundingClientRect();
+      top = B.bottom + 6;
+      if (Math.min(Dp.top, Ab.top) > h * 0.6) bottom = Math.min(Dp.top, M.top, Ab.top) - 6;   // controls below the picture
+      else { left = Dp.right + 8; right = Ab.left - 8; bottom = M.top - 6; }                  // controls at the sides
+    }
+    hudBox = { x: left, y: top, w: Math.max(60, right - left), h: Math.max(40, bottom - top), w0: w, h0: h };
+    hudBoxAt = performance.now();
+    return hudBox;
+  }
+  function updateHud() {
+    var on = hudActive(), rp = gba && gba.video.renderPath;
+    if (!on || !rp || !rp.slotUsedFrame) return false;
+    var w = window.innerWidth, h = window.innerHeight, r = hudRect(w, h);
+    var scale = Math.min(r.w / GBA_W, r.h / GBA_H);
+    hudCam.left = 0; hudCam.right = w; hudCam.top = h; hudCam.bottom = 0; hudCam.updateProjectionMatrix();
+    var any = false;
+    HUD_SLOTS.forEach(function (s, k) {
+      var used = !!rp.slotUsedFrame[s], m = hudMeshes[k];
+      slots[s].mesh.visible = false;
+      m.visible = used; any = any || used;
+      m.scale.set(GBA_W * scale, GBA_W * scale, 1);
+      m.position.set(r.x + r.w / 2, h - (r.y + r.h - GBA_H * scale / 2), 0);   // bottom of the free area
+    });
+    if (window.diorama.voxel) window.diorama.voxel.hideSlots(HUD_SLOTS);
+    return any;
+  }
+
   // ---------- Main loop ----------
   renderer.setAnimationLoop(function (time, frame) {
     runEmulator(performance.now());
@@ -404,7 +451,13 @@
     else if (mode) mode.update();
     else updatePreviewCamera();
     updateSun();
+    var hud = updateHud();
     if (mode && !renderer.xr.isPresenting) mode.render(); else renderer.render(scene, camera);
+    if (hud) {
+      renderer.autoClear = false; renderer.clearDepth();
+      renderer.render(hudScene, hudCam);
+      renderer.autoClear = true;
+    }
   });
 
   // ---------- UI wiring ----------
@@ -428,7 +481,7 @@
       if (window.diorama.world) window.diorama.world.setEnabled(el.value === 'world');
     });
   })();
-  [['glass', 'glass'], ['shadows', 'shadows'], ['sound', 'sound']].forEach(function (p) {
+  [['ui-front', 'hud'], ['glass', 'glass'], ['shadows', 'shadows'], ['sound', 'sound']].forEach(function (p) {
     var el = $(p[0]); el.checked = settings[p[1]];
     el.addEventListener('change', function () {
       settings[p[1]] = el.checked; saveSettings(); applyTransform();

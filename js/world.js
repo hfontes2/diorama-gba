@@ -307,5 +307,12 @@
   }
 
   setEnabled(D.settings.style === 'world');
-  D.world = { update: update, setEnabled: setEnabled, supported: function () { return supported; }, _map: function () { return map; } };
+  // True on FireRed/LeafGreen screens that are not the map (naming screen, menus, battles).
+  function menuScreen() {
+    if (!D.gba) return false;
+    if (!gba || gba !== D.gba) bind();
+    return !!supported && !inOverworld();
+  }
+
+  D.world = { update: update, menuScreen: menuScreen, setEnabled: setEnabled, supported: function () { return supported; }, _map: function () { return map; } };
 })();
