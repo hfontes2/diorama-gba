@@ -406,6 +406,8 @@
     var m = new THREE.Mesh(planeGeo, new THREE.MeshBasicMaterial({ map: slots[s].tex, transparent: true, alphaTest: 0.5, depthTest: false }));
     m.renderOrder = s; hudScene.add(m); return m;
   });
+  // Sprites the voxel style sends to the overlay (battle health boxes), drawn under the dialogs.
+  var hudSpriteMesh = null;
   function hudActive() {
     return settings.hud && running && !renderer.xr.isPresenting && !(window.diorama.vr && window.diorama.vr.active());
   }
@@ -439,7 +441,17 @@
       m.scale.set(GBA_W * scale, GBA_W * scale, 1);
       m.position.set(r.x + r.w / 2, h - (r.y + r.h - GBA_H * scale / 2), 0);   // bottom of the free area
     });
-    if (window.diorama.voxel) window.diorama.voxel.hideSlots(HUD_SLOTS);
+    var V = window.diorama.voxel;
+    if (V) {
+      V.hideSlots(HUD_SLOTS);
+      if (!hudSpriteMesh) {
+        hudSpriteMesh = new THREE.Mesh(planeGeo, new THREE.MeshBasicMaterial({ map: V.hud.tex, transparent: true, alphaTest: 0.5, depthTest: false }));
+        hudSpriteMesh.renderOrder = 5; hudScene.add(hudSpriteMesh);
+      }
+      hudSpriteMesh.visible = V.hud.used && V.enabled();
+      hudSpriteMesh.scale.copy(hudMeshes[0].scale); hudSpriteMesh.position.copy(hudMeshes[0].position);
+      any = any || hudSpriteMesh.visible;
+    }
     return any;
   }
 

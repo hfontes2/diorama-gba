@@ -20,7 +20,8 @@
     objectEvents: 0x02036e38,          // gObjectEvents, 0x24 bytes each: +0x10 current x,y, +0x14 previous x,y
     playerAvatar: 0x02037078,          // gPlayerAvatar: +5 objectEventId
     callback2: 0x030030f4,             // gMain.callback2
-    cb2Overworld: 0x080565b5           // CB2_Overworld (thumb)
+    cb2Overworld: 0x080565b5,          // CB2_Overworld (thumb)
+    cb2Battle: 0x08011101              // BattleMainCB2 (thumb)
   };
   var NUM_PRIMARY = 640;               // metatiles in a primary tileset
   var GAME_CODES = ['BPRE', 'BPGE'];   // FireRed, LeafGreen
@@ -314,5 +315,11 @@
     return !!supported && !inOverworld();
   }
 
-  D.world = { update: update, menuScreen: menuScreen, setEnabled: setEnabled, supported: function () { return supported; }, _map: function () { return map; } };
+  function inBattle() {
+    if (!D.gba) return false;
+    if (!gba || gba !== D.gba) bind();
+    return !!supported && u32(A.callback2) === A.cb2Battle;
+  }
+
+  D.world = { update: update, menuScreen: menuScreen, inBattle: inBattle, setEnabled: setEnabled, supported: function () { return supported; }, _map: function () { return map; } };
 })();

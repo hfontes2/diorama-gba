@@ -71,9 +71,26 @@
     uv.needsUpdate = true;
   }
 
+  // Sprites drawn over the view with the dialogs (see app.js): in battles, the health boxes and other
+  // small sprites, which would be unreadable standing up.
+  var hudData = new Uint8Array(240 * 160 * 4);
+  var hudTex = new THREE.DataTexture(hudData, 240, 160, THREE.RGBAFormat);
+  hudTex.magFilter = THREE.NearestFilter; hudTex.minFilter = THREE.NearestFilter; hudTex.generateMipmaps = false;
+  var hud = { tex: hudTex, used: false };
+
+  function copyToHud(rp, slot, x0, y0, x1, y1) {
+    var src = rp.slotPixels[slot];
+    for (var y = y0; y < y1; y++) {
+      var o = (y * 240 + x0) * 4, e = (y * 240 + x1) * 4;
+      for (var k = o; k < e; k += 4) if (src[k + 3]) { hudData[k] = src[k]; hudData[k + 1] = src[k + 1]; hudData[k + 2] = src[k + 2]; hudData[k + 3] = 255; }
+    }
+  }
+
   // groundPx: height of the ground the sprites stand on, in GBA pixels.
-  function updateSprites(rp, groundPx) {
+  // standUp(obj): optional; sprites it rejects are drawn over the view instead (battles).
+  function updateSprites(rp, groundPx, standUp) {
     var objs = rp.oam.objs, used = 0, top = D.aspectH / 2;
+    if (hud.used) { hudData.fill(0); hud.used = false; hudTex.needsUpdate = true; }
     for (var i = 0; i < objs.length && used < MAX_SPRITES; i++) {
       var o = objs[i];
       if (o.disable || (o.mode & rp.OBJWIN_MASK)) continue;
@@ -82,6 +99,11 @@
       var x = o.x >= 240 ? o.x - 512 : o.x, y = o.y >= 160 ? o.y - 256 : o.y;
       var x0 = Math.max(0, x), y0 = Math.max(0, y), x1 = Math.min(240, x + w), y1 = Math.min(160, y + h);
       if (x1 <= x0 || y1 <= y0) continue;
+      if (standUp && !standUp(o)) {
+        copyToHud(rp, SPRITE_SLOTS[o.priority & 3], x0, y0, x1, y1);
+        hud.used = true; hudTex.needsUpdate = true;
+        continue;
+      }
       var sp = sprites[used++];
       var tex = D.slots[SPRITE_SLOTS[o.priority & 3]].tex;
       sp.front.map = tex; sp.back.map = tex;
@@ -94,7 +116,10 @@
     }
     for (var j = used; j < sprites.length; j++) sprites[j].group.visible = false;
   }
-  function hideSprites() { for (var j = 0; j < sprites.length; j++) sprites[j].group.visible = false; }
+  function hideSprites() {
+    for (var j = 0; j < sprites.length; j++) sprites[j].group.visible = false;
+    if (hud.used) { hudData.fill(0); hud.used = false; hudTex.needsUpdate = true; }
+  }
 
   // The "depth between layers" slider also sets how tall the blocks are (14 mm = normal height).
   function heightScale() { return Math.max(0.05, D.settings.gap / 14); }
@@ -105,6 +130,13 @@
     if (menu) hs *= MENU_HEIGHT;
     for (var s = 0; s < 8; s++) D.slots[s].mesh.visible = false;
     columns.forEach(function (c) { c.group.visible = !!used[c.slot]; c.group.scale.z = hs; });
+    // In battles the Pokémon and trainers (large sprites behind the health boxes, OBJ priority 2 or 3)
+    // stand on their platforms; health boxes, balls and small effects go over the view.
+    if (menu && D.world.inBattle() && D.settings.hud && !(D.vr && D.vr.active())) {
+      hideSlotPlanes();
+      updateSprites(rp, 0.5, function (o) { return o.priority >= 2 && o.cachedWidth >= 32 && o.cachedHeight >= 32; });
+      return;
+    }
     if (menu) { flatSprites(used, hs); return; }
     updateSprites(rp, GROUND * hs);
   }
@@ -112,6 +144,7 @@
   // On screens that are not a map (naming screen, menus, battles) the sprites are cursors, arrows and
   // panels: standing them up would bury them inside the blocks, so they lie flat on top of the
   // background column of the same priority, like on the GBA screen.
+  function hideSlotPlanes() { for (var s = 0; s < 8; s++) D.slots[s].mesh.visible = false; }
   function flatSprites(used, hs) {
     hideSprites();
     COLUMNS.forEach(function (c) {
@@ -133,6 +166,6 @@
     if (!on) hideSprites();
   }
 
-  D.voxel = { update: update, hideSlots: hideSlots, setEnabled: setEnabled, updateSprites: updateSprites, hideSprites: hideSprites, enabled: function () { return enabled; } };
+  D.voxel = { update: update, hideSlots: hideSlots, hud: hud, setEnabled: setEnabled, updateSprites: updateSprites, hideSprites: hideSprites, enabled: function () { return enabled; } };
   setEnabled(D.settings.style === 'voxel');
 })();
