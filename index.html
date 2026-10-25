@@ -9,6 +9,7 @@
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
+<video id="camera-feed" playsinline muted hidden></video>
 <canvas id="view"></canvas>
 <canvas id="gba" width="240" height="160" hidden></canvas>
 
@@ -30,8 +31,11 @@
       <button id="menu-btn" aria-label="Opções">☰</button>
       <span id="fps"></span>
       <button id="turbo" aria-pressed="false" aria-label="Acelerar">⏩</button>
-      <button id="ar-btn" class="primary" hidden>Ver na mesa (AR)</button>
+      <button id="ar-btn" class="primary" hidden>AR</button>
+      <button id="marker-btn">Marcador</button>
+      <button id="vr-btn">VR</button>
       <button id="ar-exit" hidden>Sair do AR</button>
+      <button id="mode-exit" hidden>Sair</button>
     </div>
     <div id="ar-hint" class="hint" hidden>Aponta para a mesa e toca no ecrã para pousar o jogo</div>
 
@@ -57,6 +61,8 @@
     <label class="row">Profundidade entre camadas <input id="gap" type="range" min="0" max="40" value="14"><output id="gap-out"></output></label>
     <label class="row">Inclinação <input id="tilt" type="range" min="0" max="90" value="35"><output id="tilt-out"></output></label>
     <label class="row">Tamanho <input id="size" type="range" min="15" max="100" value="36"><output id="size-out"></output></label>
+    <label class="row">Tamanho do marcador impresso <input id="markerSize" type="range" min="4" max="30" value="10"><output id="markerSize-out"></output></label>
+    <a class="small" href="marcador.html" target="_blank" rel="noopener">Abrir o marcador para imprimir ou mostrar noutro ecrã</a>
     <label class="check"><input id="glass" type="checkbox" checked> Mostrar molduras de vidro</label>
     <label class="check"><input id="shadows" type="checkbox" checked> Sombras entre camadas</label>
     <label class="check"><input id="sound" type="checkbox" checked> Som</label>
@@ -88,7 +94,11 @@
 <script src="vendor/gbajs/js/savedata.js"></script>
 <script src="vendor/gbajs/js/gpio.js"></script>
 <script src="vendor/gbajs/js/gba.js"></script>
+<script src="vendor/aruco/cv.js"></script>
+<script src="vendor/aruco/aruco.js"></script>
 <script src="js/layered.js"></script>
 <script src="js/app.js"></script>
+<script src="js/marker.js"></script>
+<script src="js/vr.js"></script>
 </body>
 </html>

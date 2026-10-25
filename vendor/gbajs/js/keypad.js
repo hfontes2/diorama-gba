@@ -16,8 +16,8 @@ function GameBoyAdvanceKeypad() {
 	this.GAMEPAD_DOWN = 13;
 	this.GAMEPAD_START = 9;
 	this.GAMEPAD_SELECT = 8;
-	this.GAMEPAD_A = 1;
-	this.GAMEPAD_B = 0;
+	this.GAMEPAD_A = 0; // diorama: standard mapping, A is the bottom face button
+	this.GAMEPAD_B = 1;
 	this.GAMEPAD_L = 4;
 	this.GAMEPAD_R = 5;
 	this.GAMEPAD_THRESHOLD = 0.2;
@@ -88,36 +88,51 @@ GameBoyAdvanceKeypad.prototype.keyboardHandler = function(e) {
 	}
 };
 
+// diorama: modern browsers give GamepadButton objects, not numbers
+GameBoyAdvanceKeypad.prototype.buttonDown = function(gamepad, index) {
+	var b = gamepad.buttons[index];
+	if (!b) {
+		return false;
+	}
+	return typeof b === 'object' ? (b.pressed || b.value > this.GAMEPAD_THRESHOLD) : b > this.GAMEPAD_THRESHOLD;
+};
+
 GameBoyAdvanceKeypad.prototype.gamepadHandler = function(gamepad) {
 	var value = 0;
-	if (gamepad.buttons[this.GAMEPAD_LEFT] > this.GAMEPAD_THRESHOLD) {
+	// diorama: left stick also moves
+	var ax = gamepad.axes || [];
+	if (ax[0] < -0.5) value |= 1 << this.LEFT;
+	if (ax[0] > 0.5) value |= 1 << this.RIGHT;
+	if (ax[1] < -0.5) value |= 1 << this.UP;
+	if (ax[1] > 0.5) value |= 1 << this.DOWN;
+	if (this.buttonDown(gamepad, this.GAMEPAD_LEFT)) {
 		value |= 1 << this.LEFT;
 	}
-	if (gamepad.buttons[this.GAMEPAD_UP] > this.GAMEPAD_THRESHOLD) {
+	if (this.buttonDown(gamepad, this.GAMEPAD_UP)) {
 		value |= 1 << this.UP;
 	}
-	if (gamepad.buttons[this.GAMEPAD_RIGHT] > this.GAMEPAD_THRESHOLD) {
+	if (this.buttonDown(gamepad, this.GAMEPAD_RIGHT)) {
 		value |= 1 << this.RIGHT;
 	}
-	if (gamepad.buttons[this.GAMEPAD_DOWN] > this.GAMEPAD_THRESHOLD) {
+	if (this.buttonDown(gamepad, this.GAMEPAD_DOWN)) {
 		value |= 1 << this.DOWN;
 	}
-	if (gamepad.buttons[this.GAMEPAD_START] > this.GAMEPAD_THRESHOLD) {
+	if (this.buttonDown(gamepad, this.GAMEPAD_START)) {
 		value |= 1 << this.START;
 	}
-	if (gamepad.buttons[this.GAMEPAD_SELECT] > this.GAMEPAD_THRESHOLD) {
+	if (this.buttonDown(gamepad, this.GAMEPAD_SELECT)) {
 		value |= 1 << this.SELECT;
 	}
-	if (gamepad.buttons[this.GAMEPAD_A] > this.GAMEPAD_THRESHOLD) {
+	if (this.buttonDown(gamepad, this.GAMEPAD_A)) {
 		value |= 1 << this.A;
 	}
-	if (gamepad.buttons[this.GAMEPAD_B] > this.GAMEPAD_THRESHOLD) {
+	if (this.buttonDown(gamepad, this.GAMEPAD_B)) {
 		value |= 1 << this.B;
 	}
-	if (gamepad.buttons[this.GAMEPAD_L] > this.GAMEPAD_THRESHOLD) {
+	if (this.buttonDown(gamepad, this.GAMEPAD_L)) {
 		value |= 1 << this.L;
 	}
-	if (gamepad.buttons[this.GAMEPAD_R] > this.GAMEPAD_THRESHOLD) {
+	if (this.buttonDown(gamepad, this.GAMEPAD_R)) {
 		value |= 1 << this.R;
 	}
 

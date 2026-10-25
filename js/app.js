@@ -10,7 +10,7 @@
 
   // ---------- Settings ----------
   function loadSettings() {
-    var d = { gap: 14, tilt: 35, size: 36, glass: true, shadows: true, sound: true };
+    var d = { gap: 14, tilt: 35, size: 36, markerSize: 10, glass: true, shadows: true, sound: true };
     try { Object.assign(d, JSON.parse(localStorage.getItem('diorama.settings') || '{}')); } catch (e) {}
     return d;
   }
@@ -156,12 +156,40 @@
   var grid = new THREE.GridHelper(2.4, 48, 0x4c4460, 0x2c2738); grid.position.y = 0.0005; scene.add(grid);
   // AR-only shadow catcher.
   var shadowCatcher = new THREE.Mesh(new THREE.PlaneGeometry(3, 3), new THREE.ShadowMaterial({ opacity: 0.28 }));
-  shadowCatcher.rotation.x = -Math.PI / 2; shadowCatcher.receiveShadow = true; shadowCatcher.visible = false; scene.add(shadowCatcher);
+  shadowCatcher.rotation.x = -Math.PI / 2; shadowCatcher.receiveShadow = true; shadowCatcher.visible = false;
 
   var root = new THREE.Group();        // placed on the table
   var tiltPivot = new THREE.Group();   // hinge at the bottom edge of the picture
   var stack = new THREE.Group();       // the picture, centred, layers along +Z
-  root.add(tiltPivot); tiltPivot.add(stack); scene.add(root);
+  root.add(tiltPivot); tiltPivot.add(stack);
+  // The anchor is where the diorama sits: identity on screen and in WebXR, the marker pose in marker mode.
+  var anchor = new THREE.Group();
+  anchor.add(root); anchor.add(shadowCatcher); scene.add(anchor);
+
+  // Extra props shown only in the VR view.
+  var vrRoom = new THREE.Group();
+  (function () {
+    var floor = new THREE.Mesh(new THREE.PlaneGeometry(30, 30), new THREE.MeshLambertMaterial({ color: 0x17141f }));
+    floor.rotation.x = -Math.PI / 2; floor.position.y = -0.75; vrRoom.add(floor);
+    var floorGrid = new THREE.GridHelper(30, 60, 0x3b3450, 0x241f31); floorGrid.position.y = -0.749; vrRoom.add(floorGrid);
+    var leg = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.12, 0.75, 24), new THREE.MeshLambertMaterial({ color: 0x2c2638 }));
+    leg.position.y = -0.375; vrRoom.add(leg);
+    var edge = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, 0.04, 64), new THREE.MeshLambertMaterial({ color: 0x2c2638 }));
+    edge.position.y = -0.021; vrRoom.add(edge);
+  })();
+  vrRoom.visible = false; scene.add(vrRoom);
+
+  // 'preview': studio table on screen; 'camera': transparent over the camera picture; 'vr': table in a dark room.
+  function setEnvironment(kind) {
+    scene.background = kind === 'camera' ? null : previewBg;
+    scene.fog = kind === 'vr' ? new THREE.Fog(0x1d1a26, 4, 16) : null;
+    table.visible = grid.visible = kind !== 'camera';
+    vrRoom.visible = kind === 'vr';
+    shadowCatcher.visible = kind === 'camera';
+    shadowCatcher.position.set(0, 0.001, 0);
+  }
+
+  var mode = null;  // optional { update(), render() } that replaces the preview camera
 
   var planeGeo = new THREE.PlaneGeometry(1, GBA_H / GBA_W);
   (function flipV(g) { var uv = g.attributes.uv; for (var i = 0; i < uv.count; i++) uv.setY(i, 1 - uv.getY(i)); })(planeGeo);
@@ -280,7 +308,7 @@
     navigator.xr.isSessionSupported('immersive-ar').then(function (ok) {
       $('ar-btn').hidden = !ok;
       $('ar-status').textContent = ok ? 'Realidade aumentada disponível neste telemóvel.' :
-        'Este browser não abre realidade aumentada. Confirma que tens o "Google Play Services for AR" instalado.';
+        'Este telemóvel não tem ARCore. Usa o modo Marcador (AR com uma folha impressa) ou o modo VR.';
     }).catch(function () {});
   }
 
@@ -293,7 +321,7 @@
       xrSession = session; placed = false;
       renderer.xr.setReferenceSpaceType('local');
       renderer.xr.setSession(session);
-      scene.background = null; table.visible = grid.visible = false; shadowCatcher.visible = true; root.visible = false;
+      setEnvironment('camera'); root.visible = false;
       $('ar-btn').hidden = true; $('ar-exit').hidden = false; $('ar-hint').hidden = false;
       session.requestReferenceSpace('viewer').then(function (viewer) {
         return session.requestHitTestSource({ space: viewer });
@@ -304,7 +332,7 @@
       });
       session.addEventListener('end', function () {
         xrSession = null; hitSource = null; reticle.visible = false;
-        scene.background = previewBg; table.visible = grid.visible = true; shadowCatcher.visible = false; root.visible = true;
+        setEnvironment('preview'); root.visible = true;
         root.position.set(0, 0, 0); root.rotation.set(0, 0, 0);
         $('ar-btn').hidden = false; $('ar-exit').hidden = true; $('ar-hint').hidden = true;
         resize();
@@ -336,8 +364,9 @@
     }
   }
 
+  var tmpSun = new THREE.Vector3();
   function updateSun() {
-    var p = root.position;
+    var p = root.getWorldPosition(tmpSun);
     var r = settings.size / 100 * 1.2;
     sun.position.set(p.x - 0.4 * r, p.y + 1.2 * r, p.z + 0.5 * r);
     sun.target.position.copy(p);
@@ -348,9 +377,11 @@
   renderer.setAnimationLoop(function (time, frame) {
     runEmulator(performance.now());
     updateLayers();
-    if (renderer.xr.isPresenting) updateHitTest(frame); else updatePreviewCamera();
+    if (renderer.xr.isPresenting) updateHitTest(frame);
+    else if (mode) mode.update();
+    else updatePreviewCamera();
     updateSun();
-    renderer.render(scene, camera);
+    if (mode && !renderer.xr.isPresenting) mode.render(); else renderer.render(scene, camera);
   });
 
   // ---------- UI wiring ----------
@@ -364,6 +395,7 @@
   bindRange('gap', 'gap', function (v) { return v === 0 ? 'plano' : v + ' mm'; });
   bindRange('tilt', 'tilt', function (v) { return v + '°'; });
   bindRange('size', 'size', function (v) { return v + ' cm'; });
+  bindRange('markerSize', 'markerSize', function (v) { return v + ' cm'; });
   [['glass', 'glass'], ['shadows', 'shadows'], ['sound', 'sound']].forEach(function (p) {
     var el = $(p[0]); el.checked = settings[p[1]];
     el.addEventListener('change', function () {
@@ -426,6 +458,13 @@
   $('turbo').addEventListener('click', function () { turbo = !turbo; $('turbo').setAttribute('aria-pressed', String(turbo)); });
   $('ar-btn').addEventListener('click', startAR);
   $('ar-exit').addEventListener('click', function () { if (xrSession) xrSession.end(); });
+  $('marker-btn').addEventListener('click', function () { diorama.marker.start(); });
+  $('vr-btn').addEventListener('click', function () { diorama.vr.start(); });
+  $('mode-exit').addEventListener('click', function () {
+    if (diorama.marker.active()) diorama.marker.stop();
+    if (diorama.vr.active()) diorama.vr.stop();
+    $('mode-exit').hidden = true;
+  });
   $('replace').addEventListener('click', function () {
     $('menu').hidden = true;
     if (xrSession) { placed = false; root.visible = false; $('ar-hint').hidden = false; }
@@ -473,5 +512,10 @@
   refreshContinue();
   createGba().catch(function (e) { $('ar-status').textContent = 'Erro a preparar o emulador: ' + e.message; });
 
-  window.diorama = { get gba() { return gba; }, settings: settings, orbit: orbit };
+  window.diorama = {
+    get gba() { return gba; }, settings: settings, orbit: orbit,
+    THREE: THREE, scene: scene, renderer: renderer, anchor: anchor, root: root,
+    setEnvironment: setEnvironment, saveSettings: saveSettings, resize: resize, applyTransform: applyTransform,
+    setMode: function (m) { mode = m; if (!m) { anchor.matrixAutoUpdate = true; anchor.position.set(0, 0, 0); anchor.quaternion.identity(); anchor.visible = true; resize(); } }
+  };
 })();

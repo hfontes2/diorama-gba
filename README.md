@@ -14,6 +14,13 @@ O GBA desenha cada imagem com 4 fundos (BG0 a BG3) e os sprites, cada um com uma
 
 Os planos são texturas numa cena three.js. No modo AR, a app usa o hit-test do WebXR para pousar o diorama numa superfície e a DOM overlay para os comandos táteis.
 
+## Modos
+
+- **Ecrã**: o diorama numa mesa virtual; arrasta para rodar, pinça para aproximar.
+- **AR**: WebXR com hit-test, para telemóveis com ARCore.
+- **Marcador**: AR para telemóveis sem ARCore. Imprime `marcador.html` (marcador ArUco ARUCO_MIP_36h12 n.º 0, 10 cm) e aponta a câmara. A pose vem de uma homografia dos 4 cantos detetados por js-aruco2 (`js/marker.js`).
+- **VR**: imagem dividida para óculos de telemóvel (tipo Cardboard), com o giroscópio a seguir a cabeça (`js/vr.js`). Joga-se com um comando Bluetooth; tocar no ecrã volta a centrar a vista.
+
 ## Usar
 
 1. Abre o site no Chrome do telemóvel (precisa de https para o AR).
@@ -24,8 +31,9 @@ Os jogos guardados ficam no browser e podem ser exportados e importados no menu 
 
 ## Conteúdo
 
-- `vendor/gbajs/`: [GBA.js](https://github.com/endrift/gbajs) de Jeffrey Pfau (licença BSD de 2 cláusulas, ver `vendor/gbajs/COPYING`), com duas pequenas alterações marcadas com `diorama:`.
+- `vendor/gbajs/`: [GBA.js](https://github.com/endrift/gbajs) de Jeffrey Pfau (licença BSD de 2 cláusulas, ver `vendor/gbajs/COPYING`), com pequenas alterações marcadas com `diorama:`.
 - `vendor/three.min.js`: three.js r128 (licença MIT).
+- `vendor/aruco/`: [js-aruco2](https://github.com/damianofalcioni/js-aruco2) (licença MIT).
 - `roms/vila-teste.gba`: ROM de teste original, gerada por `tools/testrom/` (precisa de `clang` e `ld.lld`: `cd tools/testrom && python3 gen.py && bash build.sh`).
 
 Este repositório não inclui nem distribui jogos comerciais.
