@@ -346,7 +346,7 @@
       renderer.xr.setReferenceSpaceType('local');
       renderer.xr.setSession(session);
       setEnvironment('camera'); root.visible = false;
-      $('ar-btn').hidden = true; $('ar-exit').hidden = false; $('ar-hint').hidden = false;
+      $('ar-hint').hidden = false;
       session.requestReferenceSpace('viewer').then(function (viewer) {
         return session.requestHitTestSource({ space: viewer });
       }).then(function (src) { hitSource = src; });
@@ -358,7 +358,7 @@
         xrSession = null; hitSource = null; reticle.visible = false;
         setEnvironment('preview'); root.visible = true;
         root.position.set(0, 0, 0); root.rotation.set(0, 0, 0);
-        $('ar-btn').hidden = false; $('ar-exit').hidden = true; $('ar-hint').hidden = true;
+        $('ar-hint').hidden = true;
         resize();
       });
     }).catch(function (e) { $('ar-status').textContent = 'Não consegui abrir o AR: ' + e.message; });
@@ -459,6 +459,7 @@
   // ---------- Main loop ----------
   renderer.setAnimationLoop(function (time, frame) {
     runEmulator(performance.now());
+    refreshModeButtons();
     updateLayers();
     if (renderer.xr.isPresenting) updateHitTest(frame);
     else if (mode) mode.update();
@@ -563,15 +564,26 @@
   });
   $('close-menu').addEventListener('click', function () { $('menu').hidden = true; });
   $('turbo').addEventListener('click', function () { turbo = !turbo; $('turbo').setAttribute('aria-pressed', String(turbo)); });
-  $('ar-btn').addEventListener('click', startAR);
-  $('ar-exit').addEventListener('click', function () { if (xrSession) xrSession.end(); });
-  $('marker-btn').addEventListener('click', function () { diorama.marker.start(); });
-  $('vr-btn').addEventListener('click', function () { diorama.vr.start(); });
-  $('mode-exit').addEventListener('click', function () {
+  // Mode buttons: the current mode's button is pressed, and choosing another one leaves the current mode first.
+  var MODES = ['screen', 'ar', 'marker', 'vr'], shownMode = '';
+  function currentMode() {
+    var D = window.diorama;
+    return xrSession ? 'ar' : D.marker && D.marker.active() ? 'marker' : D.vr && D.vr.active() ? 'vr' : 'screen';
+  }
+  function switchMode(m) {
+    if (m === currentMode()) return;
     if (diorama.marker.active()) diorama.marker.stop();
     if (diorama.vr.active()) diorama.vr.stop();
-    $('mode-exit').hidden = true;
-  });
+    if (xrSession) xrSession.end();
+    if (m === 'ar') startAR(); else if (m === 'marker') diorama.marker.start(); else if (m === 'vr') diorama.vr.start();
+  }
+  function refreshModeButtons() {
+    var m = currentMode();
+    if (m === shownMode) return;
+    shownMode = m;
+    MODES.forEach(function (k) { $(k + '-btn').setAttribute('aria-pressed', String(k === m)); });
+  }
+  MODES.forEach(function (k) { $(k + '-btn').addEventListener('click', function () { switchMode(k); }); });
   $('replace').addEventListener('click', function () {
     $('menu').hidden = true;
     if (xrSession) { placed = false; root.visible = false; $('ar-hint').hidden = false; }

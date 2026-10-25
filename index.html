@@ -31,12 +31,13 @@
       <button id="menu-btn" aria-label="Opções">☰</button>
       <span id="fps"></span>
       <button id="turbo" aria-pressed="false" aria-label="Acelerar">⏩</button>
-      <button id="ar-btn" class="primary" hidden>AR</button>
-      <button id="marker-btn">Marcador</button>
-      <button id="vr-btn">VR</button>
-      <button id="ar-exit" hidden>Sair do AR</button>
+      <div class="modes" role="group" aria-label="Modo">
+        <button id="screen-btn" aria-pressed="true">Ecrã</button>
+        <button id="ar-btn" aria-pressed="false" hidden>AR</button>
+        <button id="marker-btn" aria-pressed="false">Marcador</button>
+        <button id="vr-btn" aria-pressed="false">VR</button>
+      </div>
       <button id="marker-lock" aria-pressed="false" hidden>Fixar</button>
-      <button id="mode-exit" hidden>Sair</button>
     </div>
     <div id="ar-hint" class="hint" hidden>Aponta para a mesa e toca no ecrã para pousar o jogo</div>
 

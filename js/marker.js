@@ -374,7 +374,6 @@
         document.body.classList.add('camera-mode');
         $('ar-hint').textContent = 'Aponta a câmara para o marcador';
         $('ar-hint').hidden = false;
-        $('mode-exit').hidden = false;
         $('marker-lock').hidden = false; setLocked(false);
       }).catch(function (e) {
         $('layers-info').textContent = 'Não consegui abrir a câmara: ' + e.message;

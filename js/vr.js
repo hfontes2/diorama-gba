@@ -82,7 +82,6 @@
     D.setEnvironment('vr');
     D.setMode(vrMode);
     document.body.classList.add('vr-mode');
-    $('mode-exit').hidden = false;
     if (navigator.wakeLock) navigator.wakeLock.request('screen').catch(function () {});
   }
 
