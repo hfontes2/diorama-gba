@@ -9,6 +9,18 @@
   var FOCAL = 0.815;          // focal length / image width, about 63° horizontal field of view
   var LOST_MS = 700;
 
+  // Hugo's "JIM BIM AR" marker (ARToolKit style): a black square with a 25% border and a white inner square
+  // holding this pattern, 16 x 16 cells, top row first, 1 = white. Printed from its PDF at 100%, the black
+  // square measures 10.5 cm.
+  var JIM_PATTERN = [
+    '1111111111111111', '1111111111111111', '1100011000000011', '1100011000000011',
+    '1100011000000011', '1100011111000111', '1100011111000111', '1100000011000111',
+    '1100000011000111', '1100000011111111', '1100011111111111', '1100000000001111',
+    '1100000000001111', '1100000000001111', '1111111111111111', '1111111111111111'
+  ].map(function (r) { return r.split('').map(Number); });
+  var JIM_MIN_MATCH = 0.86;   // share of pattern cells that must agree
+  var WARP = 64;
+
   var video = $('camera-feed');
   var small = document.createElement('canvas');
   var sctx = small.getContext('2d', { willReadFrequently: true });
@@ -81,8 +93,12 @@
     var sw = DETECT_WIDTH, sh = Math.round(DETECT_WIDTH * vh / vw);
     if (small.width !== sw || small.height !== sh) { small.width = sw; small.height = sh; }
     sctx.drawImage(video, 0, 0, sw, sh);
-    var markers = detector.detect(sctx.getImageData(0, 0, sw, sh));
-    var m = markers.filter(function (x) { return x.id === 0; })[0] || markers[0];
+    var m;
+    if (markerType() === 'jim') m = detectJim(sctx.getImageData(0, 0, sw, sh));
+    else {
+      var markers = detector.detect(sctx.getImageData(0, 0, sw, sh));
+      m = markers.filter(function (x) { return x.id === 0; })[0] || markers[0];
+    }
     if (m && poseFromCorners(m.corners, sw, sh, D.settings.markerSize / 100)) {
       target.decompose(tPos, tQuat, tScale);
       if (!hasPose || performance.now() - lastSeen > LOST_MS) { curPos.copy(tPos); curQuat.copy(tQuat); }
@@ -91,9 +107,61 @@
     }
   }
 
+  function markerType() { return D.settings.markerType === 'aruco' ? 'aruco' : 'jim'; }
+
+  // Finds the JIM marker: js-aruco2 finds the dark squares, then each one is straightened, its border
+  // checked and its inner pattern compared with JIM_PATTERN in the 4 rotations.
+  var warped = null;
+  function detectJim(image) {
+    detector.detect(image);   // fills detector.grey and detector.candidates
+    warped = warped || new CV.Image();
+    var best = null, cands = detector.candidates || [];
+    for (var c = 0; c < cands.length; c++) {
+      CV.warp(detector.grey, warped, cands[c], WARP);
+      CV.threshold(warped, warped, CV.otsu(warped));
+      var d = warped.data, q = WARP / 4, cell = WARP / 2 / 16, x, y;
+      // the border (outer quarter) must be nearly all black
+      var white = 0, total = 0;
+      for (y = 2; y < WARP - 2; y += 2) for (x = 2; x < WARP - 2; x += 2) {
+        if (x >= q && x < WARP - q && y >= q && y < WARP - q) continue;
+        total++; if (d[y * WARP + x]) white++;
+      }
+      if (white > total * 0.12) continue;
+      // Sample one extra cell all round, so a pattern seen a cell off (small markers, rough corners) still matches.
+      var bits = [];
+      for (var i = 0; i < 18; i++) {
+        bits[i] = [];
+        for (var j = 0; j < 18; j++) {
+          var sx = Math.min(WARP - 1, Math.max(0, (q + (j - 0.5) * cell) | 0)), sy = Math.min(WARP - 1, Math.max(0, (q + (i - 0.5) * cell) | 0));
+          bits[i][j] = d[sy * WARP + sx] ? 1 : 0;
+        }
+      }
+      var rot = bits;
+      for (var r = 0; r < 4; r++) {
+        for (var oy = 0; oy <= 2; oy++) for (var ox = 0; ox <= 2; ox++) {
+          var same = 0;
+          for (i = 0; i < 16; i++) for (j = 0; j < 16; j++) if (rot[i + oy][j + ox] === JIM_PATTERN[i][j]) same++;
+          var score = same / 256;
+          if (score >= JIM_MIN_MATCH && (!best || score > best.score)) best = { score: score, corners: detector.rotate2(cands[c], 4 - r) };
+        }
+        rot = detector.rotate(rot);
+      }
+    }
+    return best;
+  }
+
+  // "Fixar": keeps the diorama where it is, even when the marker is covered or out of view.
+  var locked = false;
+  function setLocked(on) {
+    locked = on;
+    var b = $('marker-lock');
+    b.setAttribute('aria-pressed', String(on)); b.textContent = on ? 'Fixado' : 'Fixar';
+  }
+
   var markerMode = {
     update: function () {
       layoutCamera();
+      if (locked && hasPose) { D.anchor.visible = true; $('ar-hint').hidden = true; return; }
       detect();
       var seen = hasPose && performance.now() - lastSeen < LOST_MS;
       D.anchor.visible = seen;
@@ -123,6 +191,7 @@
         $('ar-hint').textContent = 'Aponta a câmara para o marcador';
         $('ar-hint').hidden = false;
         $('mode-exit').hidden = false;
+        $('marker-lock').hidden = false; setLocked(false);
       }).catch(function (e) {
         $('layers-info').textContent = 'Não consegui abrir a câmara: ' + e.message;
         $('menu').hidden = false;
@@ -134,9 +203,12 @@
     stream = null; video.srcObject = null; video.hidden = true;
     document.body.classList.remove('camera-mode');
     $('ar-hint').hidden = true;
+    $('marker-lock').hidden = true; setLocked(false);
     D.setEnvironment('preview');
     D.setMode(null);
   }
+
+  $('marker-lock').addEventListener('click', function () { setLocked(!locked); });
 
   D.marker = { start: start, stop: stop, active: function () { return !!stream; }, poseFromCorners: poseFromCorners, target: target };
 })();

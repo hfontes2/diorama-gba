@@ -10,9 +10,10 @@
 
   // ---------- Settings ----------
   function loadSettings() {
-    var d = { gap: 14, tilt: 35, size: 36, markerSize: 10, style: '', hud: true, glass: true, shadows: true, sound: true };
+    var d = { gap: 14, tilt: 35, size: 36, markerSize: 10.5, markerType: '', style: '', hud: true, glass: true, shadows: true, sound: true };
     try { Object.assign(d, JSON.parse(localStorage.getItem('diorama.settings') || '{}')); } catch (e) {}
     if (!d.style) d.style = d.voxel ? 'voxel' : 'layers';   // older settings had a voxel on/off switch
+    if (!d.markerType) { d.markerType = 'jim'; d.markerSize = 10.5; }   // the JIM marker became the default
     delete d.voxel;
     return d;
   }
@@ -484,6 +485,15 @@
   bindRange('tilt', 'tilt', function (v) { return v + '°'; });
   bindRange('size', 'size', function (v) { return v + ' cm'; });
   bindRange('markerSize', 'markerSize', function (v) { return v + ' cm'; });
+  (function () {
+    var el = $('markerType'); el.value = settings.markerType;
+    el.addEventListener('change', function () {
+      settings.markerType = el.value;
+      settings.markerSize = el.value === 'jim' ? 10.5 : 10;   // printed sizes of the two markers
+      $('markerSize').value = settings.markerSize; $('markerSize').dispatchEvent(new Event('input'));
+      saveSettings();
+    });
+  })();
   (function () {
     var el = $('style'); el.value = settings.style;
     el.addEventListener('change', function () {
