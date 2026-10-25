@@ -10,7 +10,7 @@
 
   // ---------- Settings ----------
   function loadSettings() {
-    var d = { gap: 14, tilt: 35, size: 36, markerSize: 10, glass: true, shadows: true, sound: true };
+    var d = { gap: 14, tilt: 35, size: 36, markerSize: 10, voxel: false, glass: true, shadows: true, sound: true };
     try { Object.assign(d, JSON.parse(localStorage.getItem('diorama.settings') || '{}')); } catch (e) {}
     return d;
   }
@@ -229,6 +229,12 @@
       var c = rp.backdropColor;
       backdropMat.color.setRGB(((c & 31) << 3) / 255, ((c >> 5 & 31) << 3) / 255, ((c >> 10 & 31) << 3) / 255);
     }
+    if (window.diorama.voxel && settings.voxel) {
+      window.diorama.voxel.update(rp);
+      backdrop.visible = false;
+      return;
+    }
+    backdrop.visible = true;
     // Used slots get consecutive depths, so an empty layer never leaves a hole.
     var rank = 0, gap = settings.gap / 1000 / (settings.size / 100); // gap is in mm, stack is 1 unit wide
     var info = [];
@@ -396,11 +402,16 @@
   bindRange('tilt', 'tilt', function (v) { return v + '°'; });
   bindRange('size', 'size', function (v) { return v + ' cm'; });
   bindRange('markerSize', 'markerSize', function (v) { return v + ' cm'; });
-  [['glass', 'glass'], ['shadows', 'shadows'], ['sound', 'sound']].forEach(function (p) {
+  [['voxel', 'voxel'], ['glass', 'glass'], ['shadows', 'shadows'], ['sound', 'sound']].forEach(function (p) {
     var el = $(p[0]); el.checked = settings[p[1]];
     el.addEventListener('change', function () {
       settings[p[1]] = el.checked; saveSettings(); applyTransform();
       if (gba && p[1] === 'sound') gba.audio.masterEnable = el.checked;
+      if (p[1] === 'voxel') {
+        // Voxel blocks read best lying flat on the table.
+        settings.tilt = el.checked ? 0 : 35; $('tilt').value = settings.tilt; $('tilt').dispatchEvent(new Event('input'));
+        if (window.diorama.voxel) window.diorama.voxel.setEnabled(el.checked);
+      }
     });
   });
 
@@ -516,6 +527,7 @@
     get gba() { return gba; }, settings: settings, orbit: orbit,
     THREE: THREE, scene: scene, renderer: renderer, anchor: anchor, root: root,
     setEnvironment: setEnvironment, saveSettings: saveSettings, resize: resize, applyTransform: applyTransform,
+    slots: slots, stack: stack, aspectH: aspectH,
     setMode: function (m) { mode = m; if (!m) { anchor.matrixAutoUpdate = true; anchor.position.set(0, 0, 0); anchor.quaternion.identity(); anchor.visible = true; resize(); } }
   };
 })();
