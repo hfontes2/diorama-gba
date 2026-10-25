@@ -22,6 +22,8 @@
   var root = new THREE.Group();
   root.visible = false;
   D.stack.add(root);
+  var spriteRoot = new THREE.Group();   // shared with the 3D world style (world.js)
+  D.stack.add(spriteRoot);
 
   // ---------- Background columns ----------
   var columns = COLUMNS.map(function (c) {
@@ -57,7 +59,7 @@
     }
     g.rotation.x = Math.PI / 2;   // stand up: plane's +Y becomes height
     g.visible = false;
-    root.add(g);
+    spriteRoot.add(g);
     sprites.push({ group: g, geo: geo, front: front, back: back });
   }
 
@@ -68,7 +70,8 @@
     uv.needsUpdate = true;
   }
 
-  function updateSprites(rp) {
+  // groundPx: height of the ground the sprites stand on, in GBA pixels.
+  function updateSprites(rp, groundPx) {
     var objs = rp.oam.objs, used = 0, top = D.aspectH / 2;
     for (var i = 0; i < objs.length && used < MAX_SPRITES; i++) {
       var o = objs[i];
@@ -85,11 +88,12 @@
       var g = sp.group;
       g.scale.set((x1 - x0) * PX, (y1 - y0) * PX, 1);
       // Bottom edge of the sprite rests on the ground at the sprite's feet.
-      g.position.set((x0 + x1) / 2 * PX - 0.5, top - y1 * PX + 1.5 * PX, (GROUND * heightScale() + (y1 - y0) / 2) * PX);
+      g.position.set((x0 + x1) / 2 * PX - 0.5, top - y1 * PX + 1.5 * PX, (groundPx + (y1 - y0) / 2) * PX);
       g.visible = true;
     }
     for (var j = used; j < sprites.length; j++) sprites[j].group.visible = false;
   }
+  function hideSprites() { for (var j = 0; j < sprites.length; j++) sprites[j].group.visible = false; }
 
   // The "depth between layers" slider also sets how tall the blocks are (14 mm = normal height).
   function heightScale() { return Math.max(0.05, D.settings.gap / 14); }
@@ -98,15 +102,15 @@
     var used = rp.slotUsedFrame, hs = heightScale();
     for (var s = 0; s < 8; s++) D.slots[s].mesh.visible = false;
     columns.forEach(function (c) { c.group.visible = !!used[c.slot]; c.group.scale.z = hs; });
-    updateSprites(rp);
+    updateSprites(rp, GROUND * hs);
   }
 
   function setEnabled(on) {
     enabled = on;
     root.visible = on;
-    if (!on) for (var j = 0; j < sprites.length; j++) sprites[j].group.visible = false;
+    if (!on) hideSprites();
   }
 
-  D.voxel = { update: update, setEnabled: setEnabled, enabled: function () { return enabled; } };
-  setEnabled(!!D.settings.voxel);
+  D.voxel = { update: update, setEnabled: setEnabled, updateSprites: updateSprites, hideSprites: hideSprites, enabled: function () { return enabled; } };
+  setEnabled(D.settings.style === 'voxel');
 })();

@@ -42,6 +42,8 @@ button:focus-visible, .button:focus-within { outline: 2px solid var(--accent); o
 .actions { display: flex; flex-direction: column; gap: 10px; }
 .row { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 15px; }
 .row input { grid-column: 1 / -1; grid-row: 2; width: 100%; accent-color: var(--accent); }
+.row select { grid-column: 1 / -1; grid-row: 2; width: 100%; font: inherit; padding: 8px 10px; border-radius: 10px; background: rgba(255,255,255,0.08); color: inherit; border: 1px solid rgba(255,255,255,0.18); }
+.row select option { color: #111; }
 .row output { color: var(--accent); font-variant-numeric: tabular-nums; }
 .check { display: flex; gap: 10px; align-items: center; font-size: 15px; }
 .check input { width: 20px; height: 20px; accent-color: var(--accent); }

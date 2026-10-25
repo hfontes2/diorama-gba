@@ -10,8 +10,10 @@
 
   // ---------- Settings ----------
   function loadSettings() {
-    var d = { gap: 14, tilt: 35, size: 36, markerSize: 10, voxel: false, glass: true, shadows: true, sound: true };
+    var d = { gap: 14, tilt: 35, size: 36, markerSize: 10, style: '', glass: true, shadows: true, sound: true };
     try { Object.assign(d, JSON.parse(localStorage.getItem('diorama.settings') || '{}')); } catch (e) {}
+    if (!d.style) d.style = d.voxel ? 'voxel' : 'layers';   // older settings had a voxel on/off switch
+    delete d.voxel;
     return d;
   }
   function saveSettings() { try { localStorage.setItem('diorama.settings', JSON.stringify(settings)); } catch (e) {} }
@@ -229,11 +231,7 @@
       var c = rp.backdropColor;
       backdropMat.color.setRGB(((c & 31) << 3) / 255, ((c >> 5 & 31) << 3) / 255, ((c >> 10 & 31) << 3) / 255);
     }
-    if (window.diorama.voxel && settings.voxel) {
-      window.diorama.voxel.update(rp);
-      backdrop.visible = false;
-      return;
-    }
+    if (applyStyle(rp)) return;
     backdrop.visible = true;
     // Used slots get consecutive depths, so an empty layer never leaves a hole.
     var rank = 0, gap = settings.gap / 1000 / (settings.size / 100); // gap is in mm, stack is 1 unit wide
@@ -250,6 +248,25 @@
     layersInfo = info;
   }
   var layersInfo = [];
+
+  // Voxel and 3D world styles (voxel.js, world.js). The 3D world only exists while the game shows a map;
+  // battles and menus fall back to voxel. Returns true when one of them drew this frame.
+  function applyStyle(rp) {
+    var V = window.diorama.voxel, W = window.diorama.world, style = settings.style;
+    base.visible = true;
+    if (style === 'world' && W) {
+      if (V.enabled()) V.setEnabled(false);
+      if (W.update(rp)) { backdrop.visible = false; base.visible = false; return true; }
+    }
+    if (style === 'voxel' || style === 'world') {
+      if (!V.enabled()) V.setEnabled(true);
+      V.update(rp);
+      backdrop.visible = false;
+      return true;
+    }
+    if (V.enabled()) V.setEnabled(false);
+    return false;
+  }
   var SLOT_NAMES = ['Fundo de prioridade 3', 'Sprites prioridade 3', 'Fundo de prioridade 2', 'Sprites prioridade 2', 'Fundo de prioridade 1', 'Sprites prioridade 1', 'Fundo de prioridade 0', 'Sprites prioridade 0'];
 
   function applyTransform() {
@@ -402,16 +419,20 @@
   bindRange('tilt', 'tilt', function (v) { return v + '°'; });
   bindRange('size', 'size', function (v) { return v + ' cm'; });
   bindRange('markerSize', 'markerSize', function (v) { return v + ' cm'; });
-  [['voxel', 'voxel'], ['glass', 'glass'], ['shadows', 'shadows'], ['sound', 'sound']].forEach(function (p) {
+  (function () {
+    var el = $('style'); el.value = settings.style;
+    el.addEventListener('change', function () {
+      settings.style = el.value; saveSettings();
+      // Blocks and the 3D world read best lying flat on the table.
+      settings.tilt = el.value === 'layers' ? 35 : 0; $('tilt').value = settings.tilt; $('tilt').dispatchEvent(new Event('input'));
+      if (window.diorama.world) window.diorama.world.setEnabled(el.value === 'world');
+    });
+  })();
+  [['glass', 'glass'], ['shadows', 'shadows'], ['sound', 'sound']].forEach(function (p) {
     var el = $(p[0]); el.checked = settings[p[1]];
     el.addEventListener('change', function () {
       settings[p[1]] = el.checked; saveSettings(); applyTransform();
       if (gba && p[1] === 'sound') gba.audio.masterEnable = el.checked;
-      if (p[1] === 'voxel') {
-        // Voxel blocks read best lying flat on the table.
-        settings.tilt = el.checked ? 0 : 35; $('tilt').value = settings.tilt; $('tilt').dispatchEvent(new Event('input'));
-        if (window.diorama.voxel) window.diorama.voxel.setEnabled(el.checked);
-      }
     });
   });
 
