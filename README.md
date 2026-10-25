@@ -18,7 +18,7 @@ Os planos são texturas numa cena three.js. No modo AR, a app usa o hit-test do 
 
 - **Ecrã**: o diorama numa mesa virtual; arrasta para rodar, pinça para aproximar.
 - **AR**: WebXR com hit-test, para telemóveis com ARCore.
-- **Marcador**: AR para telemóveis sem ARCore. Imprime `marcador.html` (marcador ArUco ARUCO_MIP_36h12 n.º 0, 10 cm) e aponta a câmara. A pose vem de uma homografia dos 4 cantos detetados por js-aruco2 (`js/marker.js`).
+- **Marcador**: AR para telemóveis sem ARCore. Por omissão usa o marcador JIM BIM AR (quadrado preto de 10,5 cm); em ☰ pode escolher-se o ArUco n.º 0 de `marcador.html`. A pose vem de uma homografia dos 4 cantos do marcador. Depois de o encontrar, a app segue a textura da mesa à volta dele (fluxo ótico + RANSAC, `js/marker.js`), por isso o jogo fica no sítio quando o marcador é tapado ou sai do ecrã, e pode-se andar à volta da mesa. Ao ver o marcador outra vez corrige o desvio. **Fixar** mantém o jogo na última posição se a câmara perder também a mesa.
 - **Estilo voxel** (menu ☰): cada píxel dos fundos vira uma coluna de blocos (chão baixo, paredes médias, telhados e árvores altos) e os sprites ficam de pé no mapa, recortados a partir da OAM (`js/voxel.js`). O deslizador de profundidade muda a altura dos blocos.
 - **Mundo 3D** (menu ☰, só Pokémon FireRed e LeafGreen em inglês, versão 1.0): em vez da imagem, `js/world.js` lê da memória do jogo o mapa carregado (grelha de metatiles e colisões), os gráficos dos tilesets na VRAM e as cores na paleta. As células que bloqueiam o caminho (árvores, casas, vedações, placas) viram blocos: as duas filas de baixo ficam de pé como parede da frente e as de cima deitam-se como telhado, o que desfaz a perspetiva de cima do jogo. O chão fica plano e a água um pouco abaixo. Funciona em todos os mapas do jogo (cidades, rotas, grutas, interiores) porque é construído a partir do mapa que estiver carregado. As batalhas e outros ecrãs que não são mapa usam o estilo voxel. Os endereços de memória vêm do mapa de símbolos do projeto [pret/pokefirered](https://github.com/pret/pokefirered).
 - **VR**: imagem dividida para óculos de telemóvel (tipo Cardboard), com o giroscópio a seguir a cabeça (`js/vr.js`). Joga-se com um comando Bluetooth; tocar no ecrã volta a centrar a vista.
@@ -38,6 +38,7 @@ Os jogos guardados ficam no browser e podem ser exportados e importados no menu 
 - `vendor/gbajs/`: [GBA.js](https://github.com/endrift/gbajs) de Jeffrey Pfau (licença BSD de 2 cláusulas, ver `vendor/gbajs/COPYING`), com pequenas alterações marcadas com `diorama:`.
 - `vendor/three.min.js`: three.js r128 (licença MIT).
 - `vendor/aruco/`: [js-aruco2](https://github.com/damianofalcioni/js-aruco2) (licença MIT).
+- `vendor/jsfeat/`: [jsfeat](https://github.com/inspirit/jsfeat) 0.0.8 (licença MIT), para o fluxo ótico.
 - `roms/vila-teste.gba`: ROM de teste original, gerada por `tools/testrom/` (precisa de `clang` e `ld.lld`: `cd tools/testrom && python3 gen.py && bash build.sh`).
 
 Este repositório não inclui nem distribui jogos comerciais.
