@@ -37,7 +37,12 @@
         <button id="marker-btn" aria-pressed="false">Marcador</button>
         <button id="vr-btn" aria-pressed="false">VR</button>
       </div>
-      <button id="marker-lock" aria-pressed="false" hidden>Fixar</button>
+      <button id="table-btn" hidden>Mesa</button>
+      <button id="marker-lock" aria-pressed="false" aria-label="Fixar" title="Fixar" hidden>📌</button>
+    </div>
+    <div id="table-edit" hidden>
+      <svg id="table-svg"><polygon id="table-poly"></polygon><circle r="16"></circle><circle r="16"></circle><circle r="16"></circle><circle r="16"></circle></svg>
+      <div class="table-bar"><span>Arrasta os cantos para os cantos da mesa</span><button id="table-cancel">Cancelar</button><button id="table-ok" class="primary">Confirmar</button></div>
     </div>
     <div id="ar-hint" class="hint" hidden>Aponta para a mesa e toca no ecrã para pousar o jogo</div>
 

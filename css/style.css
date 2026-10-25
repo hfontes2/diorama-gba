@@ -98,3 +98,14 @@ button:focus-visible, .button:focus-within { outline: 2px solid var(--accent); o
   .mid { bottom: max(10px, env(safe-area-inset-bottom)); }
   .shoulders { top: 56px; }
 }
+
+/* Table outline editor (marker mode): four corners to drag, like a document scanner. */
+#hud #table-edit { position: absolute; inset: 0; pointer-events: auto; touch-action: none; }
+#table-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+#table-poly { fill: rgba(143,209,106,0.18); stroke: var(--accent); stroke-width: 3; stroke-linejoin: round; }
+#table-svg circle { fill: rgba(20,18,27,0.55); stroke: var(--accent); stroke-width: 3; cursor: grab; }
+.table-bar { position: absolute; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); transform: translateX(-50%);
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; width: max-content; max-width: calc(100% - 24px);
+  background: rgba(20,18,27,0.8); padding: 8px 10px; border-radius: 16px; font-size: 14px; }
+.table-bar span { padding: 0 4px; }
+body.table-editing #hud .controls, body.table-editing #hud .shoulders, body.table-editing .hint { display: none; }

@@ -99,6 +99,7 @@
   // replaces them. Returns true when the diorama has a place on the table.
   function processFrame(image) {
     var sw = image.width, sh = image.height, m;
+    lastImage = image;
     var tracked = trackTable(image);
     if (markerType() === 'jim') m = detectJim(image);
     else {
@@ -273,7 +274,7 @@
       var k = kps[i], z = Hi[6] * k.x + Hi[7] * k.y + Hi[8];
       if (Math.sign(z) !== front) continue;
       k.u = (Hi[0] * k.x + Hi[1] * k.y + Hi[2]) / z; k.v = (Hi[3] * k.x + Hi[4] * k.y + Hi[5]) / z;
-      if (k.u * k.u + k.v * k.v < r * r) cands.push(k);
+      if (table ? inside(table, k.u, k.v) : k.u * k.u + k.v * k.v < r * r) cands.push(k);
     }
     cands.sort(function (p, q) { return q.score - p.score; });
     var MIN_D2 = 10 * 10;
@@ -286,6 +287,202 @@
       if (!near) { ptsPrev[nPts * 2] = x; ptsPrev[nPts * 2 + 1] = y; ptsPlane[nPts * 2] = cands[i].u; ptsPlane[nPts * 2 + 1] = cands[i].v; nPts++; }
     }
   }
+
+  // ---------- Table outline (like a document scanner) ----------
+  // "Mesa" finds the table top around the marker: the camera picture is straightened onto the table plane
+  // (seen from above), the region with the table's colour is grown outwards from around the marker, and
+  // the smallest rectangle around it gives 4 corners, which can then be dragged. Once confirmed, the game
+  // is centred on the table and sized to fit it, and only points on the table are tracked.
+  var table = null, tableOffset = new THREE.Matrix4(), lastImage = null;
+  var GRID = 160, SEARCH_M = 1.0;   // straightened picture: GRID x GRID cells over +-SEARCH_M metres
+
+  function inside(poly, u, v) {
+    var c = false;
+    for (var i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      var a = poly[i], b = poly[j];
+      if ((a[1] > v) !== (b[1] > v) && u < (b[0] - a[0]) * (v - a[1]) / (b[1] - a[1]) + a[0]) c = !c;
+    }
+    return c;
+  }
+
+  function detectTable() {
+    if (!corners || !lastImage) return null;
+    var Hm = homography(MARKER_PLANE, corners.map(function (c) { return [c.x, c.y]; }));
+    if (!Hm) return null;
+    var w = lastImage.width, h = lastImage.height, d = lastImage.data, N = GRID;
+    var R = SEARCH_M / (D.settings.markerSize / 100), cell = 2 * R / N, front = Math.sign(Hm[8]);
+    var col = new Float32Array(N * N * 3), ok = new Uint8Array(N * N), gx, gy, i, k;
+    for (gy = 0; gy < N; gy++) for (gx = 0; gx < N; gx++) {
+      var u = -R + (gx + 0.5) * cell, v = -R + (gy + 0.5) * cell, z = Hm[6] * u + Hm[7] * v + Hm[8];
+      if (Math.sign(z) !== front) continue;
+      var x = (Hm[0] * u + Hm[1] * v + Hm[2]) / z, y = (Hm[3] * u + Hm[4] * v + Hm[5]) / z;
+      if (x < 0 || y < 0 || x >= w - 1 || y >= h - 1) continue;
+      var o = ((y | 0) * w + (x | 0)) * 4; i = gy * N + gx;
+      col[i * 3] = d[o]; col[i * 3 + 1] = d[o + 1]; col[i * 3 + 2] = d[o + 2]; ok[i] = 1;
+    }
+    // Blur twice (3 x 3) so wood grain and noise do not stop the region from growing.
+    for (var pass = 0; pass < 2; pass++) {
+      var out = new Float32Array(col.length);
+      for (gy = 0; gy < N; gy++) for (gx = 0; gx < N; gx++) {
+        i = gy * N + gx; if (!ok[i]) continue;
+        var sr = 0, sg = 0, sb = 0, n = 0;
+        for (var dy = -1; dy <= 1; dy++) for (var dx = -1; dx <= 1; dx++) {
+          var X = gx + dx, Y = gy + dy; if (X < 0 || Y < 0 || X >= N || Y >= N) continue;
+          var j = Y * N + X; if (!ok[j]) continue;
+          sr += col[j * 3]; sg += col[j * 3 + 1]; sb += col[j * 3 + 2]; n++;
+        }
+        out[i * 3] = sr / n; out[i * 3 + 1] = sg / n; out[i * 3 + 2] = sb / n;
+      }
+      col = out;
+    }
+    // The table's colour: the median of a ring around the marker, past the paper it is printed on.
+    var ring = [], inner = 2.6, outer = 3.6, seeds = [];
+    for (i = 0; i < N * N; i++) {
+      if (!ok[i]) continue;
+      var uu = -R + ((i % N) + 0.5) * cell, vv = -R + (((i / N) | 0) + 0.5) * cell, rr = Math.hypot(uu, vv);
+      if (rr >= inner && rr <= outer) { ring.push(i); }
+    }
+    if (ring.length < 20) return null;
+    var med = [0, 1, 2].map(function (c) { var a = ring.map(function (i) { return col[i * 3 + c]; }).sort(function (p, q) { return p - q; }); return a[a.length >> 1]; });
+    function dist(i, c) { return Math.hypot(col[i * 3] - c[0], col[i * 3 + 1] - c[1], col[i * 3 + 2] - c[2]); }
+    var devs = ring.map(function (i) { return dist(i, med); }).sort(function (p, q) { return p - q; });
+    var tol = Math.max(35, Math.min(110, devs[(devs.length * 0.8) | 0] * 1.8));
+    var region = new Uint8Array(N * N), queue = [];
+    for (i = 0; i < N * N; i++) {
+      if (!ok[i]) continue;
+      var cu = -R + ((i % N) + 0.5) * cell, cv = -R + (((i / N) | 0) + 0.5) * cell, cr = Math.hypot(cu, cv);
+      if (cr < inner || (cr <= outer && dist(i, med) < tol)) { region[i] = 1; queue.push(i); }
+    }
+    // Grow: a neighbour joins when it looks like the cell next to it and not too far from the table's colour.
+    for (k = 0; k < queue.length; k++) {
+      i = queue[k]; gx = i % N; gy = (i / N) | 0;
+      var nb = [gx > 0 ? i - 1 : -1, gx < N - 1 ? i + 1 : -1, gy > 0 ? i - N : -1, gy < N - 1 ? i + N : -1];
+      for (var q = 0; q < 4; q++) {
+        var j2 = nb[q];
+        if (j2 < 0 || region[j2] || !ok[j2]) continue;
+        if (dist(j2, [col[i * 3], col[i * 3 + 1], col[i * 3 + 2]]) < tol * 0.35 && dist(j2, med) < tol) { region[j2] = 1; queue.push(j2); }
+      }
+    }
+    var pts = [];
+    for (i = 0; i < N * N; i++) if (region[i]) pts.push([-R + ((i % N) + 0.5) * cell, -R + (((i / N) | 0) + 0.5) * cell]);
+    return minAreaRect(hull(pts));
+  }
+
+  function hull(p) {
+    p = p.slice().sort(function (a, b) { return a[0] - b[0] || a[1] - b[1]; });
+    function cross(o, a, b) { return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]); }
+    var lo = [], up = [], i;
+    for (i = 0; i < p.length; i++) { while (lo.length >= 2 && cross(lo[lo.length - 2], lo[lo.length - 1], p[i]) <= 0) lo.pop(); lo.push(p[i]); }
+    for (i = p.length - 1; i >= 0; i--) { while (up.length >= 2 && cross(up[up.length - 2], up[up.length - 1], p[i]) <= 0) up.pop(); up.push(p[i]); }
+    return lo.slice(0, -1).concat(up.slice(0, -1));
+  }
+
+  // Smallest rectangle around a convex polygon: one of its sides lies along an edge of the polygon.
+  function minAreaRect(h) {
+    if (h.length < 3) return null;
+    var best = null;
+    for (var i = 0; i < h.length; i++) {
+      var a = h[i], b = h[(i + 1) % h.length], L = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (L < 1e-9) continue;
+      var ex = (b[0] - a[0]) / L, ey = (b[1] - a[1]) / L, x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+      for (var j = 0; j < h.length; j++) {
+        var px = h[j][0] * ex + h[j][1] * ey, py = -h[j][0] * ey + h[j][1] * ex;
+        x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py);
+      }
+      var area = (x1 - x0) * (y1 - y0);
+      if (!best || area < best.area) best = { area: area, ex: ex, ey: ey, x0: x0, x1: x1, y0: y0, y1: y1 };
+    }
+    var r = best;
+    return [[r.x0, r.y0], [r.x1, r.y0], [r.x1, r.y1], [r.x0, r.y1]].map(function (p) {
+      return [p[0] * r.ex - p[1] * r.ey, p[0] * r.ey + p[1] * r.ex];
+    });
+  }
+
+  // Centres the game on the table, turned to the nearest table side facing the camera, as big as fits.
+  function fitTable(poly) {
+    var s = D.settings.markerSize / 100, c = [0, 0], i;
+    poly.forEach(function (p) { c[0] += p[0] / 4; c[1] += p[1] / 4; });
+    var e0 = [poly[1][0] - poly[0][0], poly[1][1] - poly[0][1]], e1 = [poly[2][0] - poly[1][0], poly[2][1] - poly[1][1]];
+    var L0 = (Math.hypot(e0[0], e0[1]) + Math.hypot(poly[2][0] - poly[3][0], poly[2][1] - poly[3][1])) / 2;
+    var L1 = (Math.hypot(e1[0], e1[1]) + Math.hypot(poly[3][0] - poly[0][0], poly[3][1] - poly[0][1])) / 2;
+    // Where the camera is, on the table plane in marker units.
+    var inv = new THREE.Matrix4().compose(curPos, curQuat, new THREE.Vector3(1, 1, 1)).invert();
+    var camL = new THREE.Vector3().applyMatrix4(inv), dc = [camL.x / s - c[0], camL.z / s - c[1]];
+    var best = null;
+    [[e0, L0, L1], [e1, L1, L0]].forEach(function (e) {
+      var n = Math.hypot(e[0][0], e[0][1]);
+      [1, -1].forEach(function (sg) {
+        var a = [sg * e[0][0] / n, sg * e[0][1] / n], zd = [-a[1], a[0]], score = zd[0] * dc[0] + zd[1] * dc[1];
+        if (!best || score > best.score) best = { score: score, a: a, Lx: e[1], Lz: e[2] };
+      });
+    });
+    var aspectH = D.aspectH, size = Math.min(0.92 * best.Lx * s, 0.92 * best.Lz * s / (aspectH + 0.04));
+    size = Math.max(0.15, Math.min(1, size));
+    var el = $('size'); el.value = Math.round(size * 100); el.dispatchEvent(new Event('input'));
+    size = D.settings.size / 100;
+    var alpha = Math.atan2(-best.a[1], best.a[0]);
+    // The diorama sits behind its anchor (see applyTransform in app.js); move it back onto the centre.
+    var back = new THREE.Vector3(0, 0, (aspectH / 2 + 0.02) * size).applyAxisAngle(new THREE.Vector3(0, 1, 0), alpha);
+    tableOffset.makeRotationY(alpha).setPosition(c[0] * s + back.x, 0, c[1] * s + back.z);
+  }
+
+  // Detection-image pixels <-> screen pixels (the video fills the screen like object-fit: cover).
+  function toScreen(x, y) {
+    var W = window.innerWidth, H = window.innerHeight, vw = video.videoWidth, vh = video.videoHeight, k = Math.max(W / vw, H / vh);
+    return [x * vw / small.width * k + (W - vw * k) / 2, y * vh / small.height * k + (H - vh * k) / 2];
+  }
+  function fromScreen(X, Y) {
+    var W = window.innerWidth, H = window.innerHeight, vw = video.videoWidth, vh = video.videoHeight, k = Math.max(W / vw, H / vh);
+    return [(X - (W - vw * k) / 2) / k * small.width / vw, (Y - (H - vh * k) / 2) / k * small.height / vh];
+  }
+
+  var editPts = null, dragK = -1;
+  function startEdit() {
+    if (!corners) { $('ar-hint').textContent = 'Aponta primeiro para o marcador'; $('ar-hint').hidden = false; return; }
+    var a = 4;
+    editPts = table ? table.map(function (p) { return p.slice(); }) : (detectTable() || [[-a, -a], [a, -a], [a, a], [-a, a]]);
+    $('table-edit').hidden = false; document.body.classList.add('table-editing');
+  }
+  function endEdit(ok) {
+    if (ok && editPts) { table = editPts; fitTable(table); nPts = 0; }
+    editPts = null; dragK = -1;
+    $('table-edit').hidden = true; document.body.classList.remove('table-editing');
+  }
+  function drawEdit() {
+    if (!editPts) return;
+    var poly = $('table-poly'), circles = $('table-svg').querySelectorAll('circle');
+    var Hm = corners && homography(MARKER_PLANE, corners.map(function (c) { return [c.x, c.y]; }));
+    poly.style.display = Hm ? '' : 'none';
+    if (!Hm) return;
+    var sp = editPts.map(function (p) {
+      var z = Hm[6] * p[0] + Hm[7] * p[1] + Hm[8];
+      return toScreen((Hm[0] * p[0] + Hm[1] * p[1] + Hm[2]) / z, (Hm[3] * p[0] + Hm[4] * p[1] + Hm[5]) / z);
+    });
+    poly.setAttribute('points', sp.map(function (p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join(' '));
+    // A corner outside the picture is shown at its edge, so it can still be grabbed and dragged in.
+    var W = window.innerWidth, H = window.innerHeight, top = 70, bottom = H - 120;
+    sp.forEach(function (p, k) {
+      circles[k].setAttribute('cx', Math.max(20, Math.min(W - 20, p[0])).toFixed(1));
+      circles[k].setAttribute('cy', Math.max(top, Math.min(bottom, p[1])).toFixed(1));
+    });
+  }
+  (function () {
+    var svg = $('table-svg');
+    Array.prototype.forEach.call(svg.querySelectorAll('circle'), function (c, k) {
+      c.addEventListener('pointerdown', function (e) { e.preventDefault(); dragK = k; try { c.setPointerCapture(e.pointerId); } catch (err) {} });
+      c.addEventListener('pointermove', function (e) {
+        if (dragK !== k || !corners) return;
+        var Hi = imageToPlane(); if (!Hi) return;
+        var q = fromScreen(e.clientX, e.clientY), z = Hi[6] * q[0] + Hi[7] * q[1] + Hi[8];
+        editPts[k] = [(Hi[0] * q[0] + Hi[1] * q[1] + Hi[2]) / z, (Hi[3] * q[0] + Hi[4] * q[1] + Hi[5]) / z];
+        drawEdit();
+      });
+      c.addEventListener('pointerup', function () { dragK = -1; });
+    });
+    $('table-btn').addEventListener('click', startEdit);
+    $('table-ok').addEventListener('click', function () { endEdit(true); });
+    $('table-cancel').addEventListener('click', function () { endEdit(false); });
+  })();
 
   function invert3(m) {
     var a = m[0], b = m[1], c = m[2], d = m[3], e = m[4], f = m[5], g = m[6], h = m[7], i = m[8];
@@ -344,24 +541,26 @@
   function setLocked(on) {
     locked = on;
     var b = $('marker-lock');
-    b.setAttribute('aria-pressed', String(on)); b.textContent = on ? 'Fixado' : 'Fixar';
+    b.setAttribute('aria-pressed', String(on)); b.title = on ? 'Fixado' : 'Fixar';
   }
 
   var markerMode = {
     update: function () {
       layoutCamera();
       detect();
+      drawEdit();
       // With "Fixar" on, the diorama stays at its last place even when neither the marker nor the table is seen.
-      var seen = !!corners || (locked && hasPose);
+      var seen = (!!corners || (locked && hasPose)) && !editPts;   // the game is hidden while the table is outlined
       D.anchor.visible = seen;
       $('ar-hint').hidden = !!corners;
       if (!corners) $('ar-hint').textContent = hasPose ? 'Aponta outra vez para o marcador' : 'Aponta a câmara para o marcador';
-      if (!seen) { hasPose = false; return; }
+      if (!seen) { if (!editPts) hasPose = false; return; }
       // Smooth more while the phone is nearly still (small differences are noise) and follow quickly when it moves.
       var a = Math.min(0.85, Math.max(0.2, curPos.distanceTo(tPos) / 0.01, curQuat.angleTo(tQuat) / 0.035));
       curPos.lerp(tPos, a); curQuat.slerp(tQuat, a);
       D.anchor.matrixAutoUpdate = false;
       D.anchor.matrix.compose(curPos, curQuat, new THREE.Vector3(1, 1, 1));
+      if (table) D.anchor.matrix.multiply(tableOffset);
       D.anchor.matrixWorldNeedsUpdate = true;
     },
     render: function () { D.renderer.render(D.scene, cam); }
@@ -384,6 +583,7 @@
         $('ar-hint').textContent = 'Aponta a câmara para o marcador';
         $('ar-hint').hidden = false;
         $('marker-lock').hidden = false; setLocked(false);
+        $('table-btn').hidden = false; table = null;
       }).catch(function (e) {
         $('layers-info').textContent = 'Não consegui abrir a câmara: ' + e.message;
         $('menu').hidden = false;
@@ -396,6 +596,7 @@
     document.body.classList.remove('camera-mode');
     $('ar-hint').hidden = true;
     $('marker-lock').hidden = true; setLocked(false);
+    $('table-btn').hidden = true; endEdit(false); table = null;
     D.setEnvironment('preview');
     D.setMode(null);
   }
@@ -403,5 +604,5 @@
   $('marker-lock').addEventListener('click', function () { setLocked(!locked); });
 
   D.marker = { start: start, stop: stop, active: function () { return !!stream; }, poseFromCorners: poseFromCorners, target: target,
-    _process: function (image) { detector = detector || new AR.Detector({ dictionaryName: 'ARUCO_MIP_36h12' }); var ok = processFrame(image); return { ok: ok, corners: corners, points: nPts }; } };
+    _detectTable: function () { return detectTable(); }, _process: function (image) { detector = detector || new AR.Detector({ dictionaryName: 'ARUCO_MIP_36h12' }); var ok = processFrame(image); return { ok: ok, corners: corners, points: nPts }; } };
 })();
