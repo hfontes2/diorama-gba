@@ -85,6 +85,15 @@
   R.drawScanline = function (y) {
     if (!this.slotBacking) this.initSlices();
     this.vcount = y;
+    // Frames the app will not show (it runs several per screen refresh when the phone is slow) are not drawn;
+    // only the affine backgrounds' per-line movement is kept.
+    if (this.skip) {
+      for (var j = 0; j < this.drawLayers.length; ++j) {
+        var l = this.drawLayers[j];
+        if (l.bg && l.enabled) { l.sx += l.dmx; l.sy += l.dmy; }
+      }
+      return;
+    }
     var s, x, i, layer, backing;
     var rowStart = y * W * 4;
 

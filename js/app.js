@@ -88,9 +88,11 @@
     var dt = Math.min(now - lastTime, 100);
     lastTime = now;
     acc += dt * (turbo ? 3 : 1);
-    var n = 0, max = turbo ? 9 : 4;
-    while (acc >= FRAME_MS && n < max) { gba.advanceFrame(); acc -= FRAME_MS; n++; }
-    if (n === max) acc = 0;
+    var max = turbo ? 9 : 4, n = Math.min(max, Math.floor(acc / FRAME_MS)), rp = gba.video.renderPath;
+    // Only the last frame of the batch is drawn; the others are skipped (see layered.js).
+    for (var k = 0; k < n; k++) { rp.skip = k < n - 1; gba.advanceFrame(); }
+    rp.skip = false;
+    acc = n === max ? 0 : acc - n * FRAME_MS;
     fpsFrames += n; fpsTime += dt;
     if (fpsTime > 1000) { $('fps').textContent = Math.round(fpsFrames * 1000 / fpsTime) + ' fps'; fpsFrames = 0; fpsTime = 0; }
   }
@@ -319,6 +321,21 @@
   }
   window.addEventListener('resize', resize); resize();
 
+  // When the phone cannot keep up, the 3D view is drawn at a lower resolution (and back up when it can),
+  // which leaves more time for the emulator.
+  var MAX_RATIO = Math.min(window.devicePixelRatio || 1, 2), pixelRatio = MAX_RATIO, qFrames = 0, qStart = 0;
+  function adaptQuality(now) {
+    if (renderer.xr.isPresenting || document.visibilityState !== 'visible') { qStart = 0; return; }
+    if (!qStart) { qStart = now; qFrames = 0; return; }
+    qFrames++;
+    if (now - qStart < 2000) return;
+    var fps = qFrames * 1000 / (now - qStart), r = pixelRatio;
+    if (fps < 45 && r > 1) r = Math.max(1, r - 0.25);
+    else if (fps > 58 && r < MAX_RATIO) r = Math.min(MAX_RATIO, r + 0.25);
+    qStart = now; qFrames = 0;
+    if (r !== pixelRatio) { pixelRatio = r; renderer.setPixelRatio(r); resize(); }
+  }
+
   // ---------- AR (WebXR) ----------
   var xrSession = null, hitSource = null, placed = false;
   var reticle = new THREE.Mesh(new THREE.RingGeometry(0.06, 0.075, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x8fd16a }));
@@ -459,6 +476,7 @@
   // ---------- Main loop ----------
   renderer.setAnimationLoop(function (time, frame) {
     runEmulator(performance.now());
+    adaptQuality(performance.now());
     refreshModeButtons();
     updateLayers();
     if (renderer.xr.isPresenting) updateHitTest(frame);

@@ -88,7 +88,8 @@
 
   // groundPx: height of the ground the sprites stand on, in GBA pixels.
   // standUp(obj): optional; sprites it rejects are drawn over the view instead (battles).
-  function updateSprites(rp, groundPx, standUp) {
+  // place(x0, y1, x1): optional; returns { lift, shift } in pixels to raise a sprite and move it south.
+  function updateSprites(rp, groundPx, standUp, place) {
     var objs = rp.oam.objs, used = 0, top = D.aspectH / 2;
     if (hud.used) { hudData.fill(0); hud.used = false; hudTex.needsUpdate = true; }
     for (var i = 0; i < objs.length && used < MAX_SPRITES; i++) {
@@ -111,7 +112,8 @@
       var g = sp.group;
       g.scale.set((x1 - x0) * PX, (y1 - y0) * PX, 1);
       // Bottom edge of the sprite rests on the ground at the sprite's feet.
-      g.position.set((x0 + x1) / 2 * PX - 0.5, top - y1 * PX + 1.5 * PX, (groundPx + (y1 - y0) / 2) * PX);
+      var pl = place && place(x0, y1, x1), up = pl ? pl.lift : 0, south = pl ? pl.shift : 0;
+      g.position.set((x0 + x1) / 2 * PX - 0.5, top - (y1 + south) * PX + 1.5 * PX, (groundPx + up + (y1 - y0) / 2) * PX);
       g.visible = true;
     }
     for (var j = used; j < sprites.length; j++) sprites[j].group.visible = false;

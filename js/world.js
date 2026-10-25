@@ -164,6 +164,7 @@
     }
     // Every ground cell gets a height (pixels) and the metatile shown on its top face.
     var hgt = new Int16Array(W * H), top = new Int16Array(W * H), wallOf = new Int32Array(W * H).fill(-1);
+    lift = new Int16Array(W * H); shift = new Int16Array(W * H);
     for (i = 0; i < W * H; i++) { top[i] = id[i]; hgt[i] = water[i] ? -WATER_DEPTH : 0; }
     for (x = 0; x < W; x++) {
       y = 0;
@@ -173,7 +174,15 @@
         var y1 = y - 1, L = y1 - y0 + 1, w = L >= 3 ? WALL : 1;
         var roofRows = L - w;                         // rows y0 .. y0+roofRows-1 lie on top, shifted south by w
         var fill = y0 > 0 ? id[(y0 - 1) * W + x] : id[y0 * W + x];
-        for (var r = y0; r <= y1; r++) { top[r * W + x] = fill; hgt[r * W + x] = 0; }
+        for (var r = y0; r <= y1; r++) {
+          top[r * W + x] = fill; hgt[r * W + x] = 0;
+          // Things on the block (Poké Balls on a table, items on a shelf) stand on its top face, where its tiles went.
+          var onRoof = roofRows > 0 && r < y0 + roofRows;
+          if (!(cells[r * W + x] >> 10 & 3)) continue;   // doors and the walkable tops of roofs and trees
+          // Rows that became the front wall of a tall block (chairs against a wall) stand on the floor in front of it.
+          var onWall = roofRows > 0 && !onRoof;
+          lift[r * W + x] = onWall ? 0 : w * T; shift[r * W + x] = onRoof ? w * T : onWall ? (y1 - r + 1) * T : 0;
+        }
         if (roofRows > 0) {
           for (r = 0; r < roofRows; r++) { var g = (y0 + r + w) * W + x; top[g] = id[(y0 + r) * W + x]; hgt[g] = w * T; }
         } else {
@@ -284,6 +293,7 @@
     if (!changed && (ps !== palSig || frame % 6 === 0)) refreshAtlas();
     palSig = ps;
     var o = screenOrigin(changed);
+    origin = o;
     mapGroup.position.set(-(o.x + 120 + EXTRA * T) * PX, (o.y + 80 + EXTRA * T) * PX, 0);
 
     // Clip the world to a rectangle around the view.
@@ -297,8 +307,18 @@
     for (var s = 0; s < 8; s++) D.slots[s].mesh.visible = false;
     // Text boxes and menus float above the world.
     if (rp.slotUsedFrame[6]) { var ui = D.slots[6].mesh; ui.visible = true; ui.position.z = 3.2 * T * PX; }
-    D.voxel.updateSprites(rp, 0);
+    D.voxel.updateSprites(rp, 0, null, placeSprite);
     return true;
+  }
+
+  // Sprites whose feet are on a solid block (objects on tables and counters) are raised onto its top face.
+  var lift = null, shift = null, origin = null;
+  function placeSprite(x0, y1, x1) {
+    if (!lift || !origin) return null;
+    var cx = Math.floor(((x0 + x1) / 2 + origin.x) / T) + EXTRA, cy = Math.floor((y1 - 2 + origin.y) / T) + EXTRA;
+    if (cx < 0 || cy < 0 || cx >= map.W || cy >= map.H) return null;
+    var i = cy * map.W + cx;
+    return lift[i] || shift[i] ? { lift: lift[i], shift: shift[i] } : null;
   }
 
   function setEnabled(on) {
