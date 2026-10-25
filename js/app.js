@@ -143,8 +143,8 @@
   scene.background = previewBg;
   var camera = new THREE.PerspectiveCamera(50, 1, 0.01, 50);
 
-  scene.add(new THREE.AmbientLight(0xffffff, 0.78));
-  var sun = new THREE.DirectionalLight(0xffffff, 0.34);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+  var sun = new THREE.DirectionalLight(0xffffff, 0.26);
   sun.castShadow = true;
   sun.shadow.mapSize.set(1024, 1024);
   sun.shadow.bias = -0.0008;
