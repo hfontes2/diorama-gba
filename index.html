@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#14121b">
+<title>Diorama GBA</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<canvas id="view"></canvas>
+<canvas id="gba" width="240" height="160" hidden></canvas>
+
+<div id="ui">
+  <section id="start" class="sheet">
+    <h1>Diorama GBA</h1>
+    <p class="lead">Joga os teus jogos de Game Boy Advance com o ecrã separado em camadas, pousado em cima da mesa.</p>
+    <div class="actions">
+      <button id="continue" class="primary" hidden>Continuar</button>
+      <label class="button primary" id="open-label">Abrir ROM (.gba)<input id="rom-file" type="file" accept=".gba,.bin,.zip,application/octet-stream" hidden></label>
+      <button id="demo">Experimentar com a vila de teste</button>
+    </div>
+    <p class="small">Usa uma ROM tirada de um cartucho teu. A ROM e os jogos guardados ficam só neste telemóvel.</p>
+    <p class="small" id="ar-status"></p>
+  </section>
+
+  <div id="hud" hidden>
+    <div class="topbar">
+      <button id="menu-btn" aria-label="Opções">☰</button>
+      <span id="fps"></span>
+      <button id="turbo" aria-pressed="false" aria-label="Acelerar">⏩</button>
+      <button id="ar-btn" class="primary" hidden>Ver na mesa (AR)</button>
+      <button id="ar-exit" hidden>Sair do AR</button>
+    </div>
+    <div id="ar-hint" class="hint" hidden>Aponta para a mesa e toca no ecrã para pousar o jogo</div>
+
+    <div class="shoulders">
+      <button class="key" data-key="9">L</button>
+      <button class="key" data-key="8">R</button>
+    </div>
+    <div class="controls">
+      <div id="dpad" aria-label="Direções"><span class="h"></span><span class="v"></span></div>
+      <div class="mid">
+        <button class="key small-key" data-key="2">SELECT</button>
+        <button class="key small-key" data-key="3">START</button>
+      </div>
+      <div class="ab">
+        <button class="key round" data-key="1">B</button>
+        <button class="key round" data-key="0">A</button>
+      </div>
+    </div>
+  </div>
+
+  <section id="menu" class="sheet" hidden>
+    <h2>Opções</h2>
+    <label class="row">Profundidade entre camadas <input id="gap" type="range" min="0" max="40" value="14"><output id="gap-out"></output></label>
+    <label class="row">Inclinação <input id="tilt" type="range" min="0" max="90" value="35"><output id="tilt-out"></output></label>
+    <label class="row">Tamanho <input id="size" type="range" min="15" max="100" value="36"><output id="size-out"></output></label>
+    <label class="check"><input id="glass" type="checkbox" checked> Mostrar molduras de vidro</label>
+    <label class="check"><input id="shadows" type="checkbox" checked> Sombras entre camadas</label>
+    <label class="check"><input id="sound" type="checkbox" checked> Som</label>
+    <div class="actions">
+      <button id="replace">Reposicionar na mesa</button>
+      <button id="export-save">Exportar jogo guardado</button>
+      <label class="button">Importar jogo guardado (.sav)<input id="save-file" type="file" accept=".sav,application/octet-stream" hidden></label>
+      <button id="change-rom">Trocar de ROM</button>
+      <button id="close-menu" class="primary">Fechar</button>
+    </div>
+    <p class="small" id="layers-info"></p>
+  </section>
+</div>
+
+<script src="vendor/three.min.js"></script>
+<script src="vendor/gbajs/js/util.js"></script>
+<script src="vendor/gbajs/js/core.js"></script>
+<script src="vendor/gbajs/js/arm.js"></script>
+<script src="vendor/gbajs/js/thumb.js"></script>
+<script src="vendor/gbajs/js/mmu.js"></script>
+<script src="vendor/gbajs/js/io.js"></script>
+<script src="vendor/gbajs/js/audio.js"></script>
+<script src="vendor/gbajs/js/video.js"></script>
+<script src="vendor/gbajs/js/video/proxy.js"></script>
+<script src="vendor/gbajs/js/video/software.js"></script>
+<script src="vendor/gbajs/js/irq.js"></script>
+<script src="vendor/gbajs/js/keypad.js"></script>
+<script src="vendor/gbajs/js/sio.js"></script>
+<script src="vendor/gbajs/js/savedata.js"></script>
+<script src="vendor/gbajs/js/gpio.js"></script>
+<script src="vendor/gbajs/js/gba.js"></script>
+<script src="js/layered.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

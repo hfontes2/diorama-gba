@@ -1,0 +1,83 @@
+:root {
+  --bg: #14121b;
+  --panel: rgba(28, 25, 38, 0.92);
+  --fg: #ece8f4;
+  --muted: #a39db3;
+  --accent: #8fd16a;
+  --key: rgba(255, 255, 255, 0.22);
+  --key-border: rgba(255, 255, 255, 0.45);
+  --key-down: rgba(143, 209, 106, 0.55);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); overflow: hidden;
+  font: 16px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; touch-action: none; user-select: none; -webkit-user-select: none; }
+#view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+#ui { position: fixed; inset: 0; pointer-events: none; }
+#ui > * { pointer-events: auto; }
+[hidden] { display: none !important; }
+
+button, .button {
+  font: inherit; color: var(--fg); background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 12px; padding: 12px 16px; cursor: pointer; text-align: center; display: inline-block;
+}
+button.primary, .button.primary { background: var(--accent); color: #12200a; border-color: transparent; font-weight: 700; }
+button:focus-visible, .button:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.sheet {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: min(92vw, 460px); max-height: 92vh; overflow-y: auto;
+  background: var(--panel); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px; padding: 24px; display: flex; flex-direction: column; gap: 14px;
+}
+.sheet h1 { margin: 0; font-size: 28px; letter-spacing: 0.01em; }
+.sheet h2 { margin: 0; font-size: 20px; }
+.lead { margin: 0; color: var(--fg); }
+.small { margin: 0; color: var(--muted); font-size: 14px; }
+.actions { display: flex; flex-direction: column; gap: 10px; }
+.row { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 15px; }
+.row input { grid-column: 1 / -1; grid-row: 2; width: 100%; accent-color: var(--accent); }
+.row output { color: var(--accent); font-variant-numeric: tabular-nums; }
+.check { display: flex; gap: 10px; align-items: center; font-size: 15px; }
+.check input { width: 20px; height: 20px; accent-color: var(--accent); }
+
+.topbar {
+  position: absolute; top: 0; left: 0; right: 0; display: flex; gap: 8px; align-items: center;
+  padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 10px max(12px, env(safe-area-inset-left));
+  pointer-events: none;
+}
+.topbar > * { pointer-events: auto; }
+.topbar button { padding: 8px 14px; background: rgba(20,18,27,0.6); }
+.topbar button.primary { background: var(--accent); }
+#turbo[aria-pressed="true"] { background: var(--accent); color: #12200a; }
+#fps { margin-right: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.hint { position: absolute; top: 64px; left: 50%; transform: translateX(-50%); background: rgba(20,18,27,0.7);
+  padding: 8px 14px; border-radius: 99px; font-size: 14px; white-space: nowrap; pointer-events: none; }
+
+#hud { position: absolute; inset: 0; pointer-events: none; }
+#hud > * { pointer-events: none; }
+#hud .key, #dpad, .topbar > * { pointer-events: auto; }
+.key { background: var(--key); border: 1px solid var(--key-border); color: #fff; font-weight: 700; backdrop-filter: blur(4px);
+  touch-action: none; }
+.key.down { background: var(--key-down); }
+.shoulders { position: absolute; left: 0; right: 0; top: 64px; display: flex; justify-content: space-between;
+  padding: 0 max(12px, env(safe-area-inset-right)) 0 max(12px, env(safe-area-inset-left)); }
+.shoulders .key { width: 78px; padding: 10px 0; border-radius: 12px; }
+.controls { position: absolute; left: 0; right: 0; bottom: 0; display: flex; justify-content: space-between; align-items: flex-end;
+  padding: 0 max(18px, env(safe-area-inset-right)) max(22px, env(safe-area-inset-bottom)) max(18px, env(safe-area-inset-left)); }
+#dpad { position: relative; width: 136px; height: 136px; touch-action: none; }
+#dpad span { position: absolute; background: var(--key); border: 1px solid var(--key-border); backdrop-filter: blur(4px); border-radius: 10px; }
+#dpad .h { left: 0; right: 0; top: 46px; height: 44px; }
+#dpad .v { top: 0; bottom: 0; left: 46px; width: 44px; }
+#dpad.up .v, #dpad.down .v, #dpad.left .h, #dpad.right .h { background: var(--key-down); }
+.mid { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(max(22px, env(safe-area-inset-bottom)) + 150px); display: flex; gap: 10px; }
+.small-key { font-size: 11px; padding: 6px 10px; border-radius: 99px; letter-spacing: 0.06em; }
+.ab { display: flex; gap: 14px; align-items: flex-end; }
+.round { width: 64px; height: 64px; border-radius: 50%; padding: 0; font-size: 20px; }
+.ab .round:last-child { margin-bottom: 34px; }
+
+@media (max-height: 480px) and (orientation: landscape) {
+  .controls { padding-bottom: max(14px, env(safe-area-inset-bottom)); }
+  .mid { bottom: max(10px, env(safe-area-inset-bottom)); }
+  .shoulders { top: 56px; }
+}
