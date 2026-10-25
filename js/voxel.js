@@ -133,8 +133,8 @@
     for (var s = 0; s < 8; s++) D.slots[s].mesh.visible = false;
     columns.forEach(function (c) { c.group.visible = !!used[c.slot]; c.group.scale.z = hs; });
     // In battles the Pokémon and trainers (large sprites behind the health boxes, OBJ priority 2 or 3)
-    // stand on their platforms; health boxes, balls and small effects go over the view.
-    if (menu && D.world.inBattle() && D.settings.hud && !(D.vr && D.vr.active())) {
+    // stand on their platforms; health boxes, balls and small effects go over the view (in VR, on a panel).
+    if (menu && D.world.inBattle() && D.settings.hud && !(D.renderer.xr && D.renderer.xr.isPresenting)) {
       hideSlotPlanes();
       updateSprites(rp, 0.5, function (o) { return o.priority >= 2 && o.cachedWidth >= 32 && o.cachedHeight >= 32; });
       return;

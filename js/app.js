@@ -445,7 +445,31 @@
     hudBoxAt = performance.now();
     return hudBox;
   }
+  // In VR there is no screen to draw over, so the same things go on a panel standing at the far edge of the
+  // diorama, like a TV behind it.
+  var vrHud = null;
+  function updateVrHud() {
+    var on = settings.hud && running && window.diorama.vr && window.diorama.vr.active(), rp = gba && gba.video.renderPath, V = window.diorama.voxel;
+    if (!vrHud) {
+      if (!on) return;
+      vrHud = new THREE.Group();
+      [slots[6].tex, slots[7].tex, V.hud.tex].forEach(function (tex, k) {
+        var m = new THREE.Mesh(planeGeo, new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide }));
+        m.position.z = k * 0.002; m.renderOrder = 6 + k; vrHud.add(m);
+      });
+      vrHud.rotation.x = Math.PI / 2;   // stand up: the picture's top is up
+      stack.add(vrHud);
+    }
+    vrHud.visible = !!(on && rp && rp.slotUsedFrame);
+    if (!vrHud.visible) return;
+    vrHud.position.set(0, aspectH / 2 + 0.03, aspectH / 2 + 0.01);
+    HUD_SLOTS.forEach(function (s, k) { vrHud.children[k].visible = !!rp.slotUsedFrame[s]; slots[s].mesh.visible = false; });
+    V.hideSlots(HUD_SLOTS);
+    vrHud.children[2].visible = V.hud.used && V.enabled();
+  }
+
   function updateHud() {
+    updateVrHud();
     var on = hudActive(), rp = gba && gba.video.renderPath;
     if (!on || !rp || !rp.slotUsedFrame) return false;
     var w = window.innerWidth, h = window.innerHeight, r = hudRect(w, h);
